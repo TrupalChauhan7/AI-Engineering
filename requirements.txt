@@ -1,0 +1,36 @@
+# Pinned after first successful setup with:  pip freeze > requirements.txt
+# For now these are the packages; freeze exact versions once installed.
+
+# Transcription (RQ2) — free, runs locally on your Mac
+# NOTE: large-v3-turbo needs a recent build, so we require a minimum version.
+openai-whisper>=20240930
+
+# Evaluation baselines (all free, open-source)
+rouge-score
+bert-score
+python-Levenshtein
+
+# Stats + plots for the evaluation/correlation work (RQ1) & figures
+scipy
+matplotlib
+scikit-learn   # PR-AUC / human-ceiling flagging metrics (imports as sklearn)
+
+# Data handling + TextGrid parsing + utilities
+pandas
+numpy
+tqdm
+praatio
+pyyaml
+python-dotenv
+
+# Testing
+pytest
+
+# LLM client — the code talks to the local Ollama HTTP API
+requests
+
+# Demo API (app/api) — wraps s2n.service for the Clarion frontend.
+# SSE is done with a plain StreamingResponse, so no sse-starlette needed.
+fastapi
+uvicorn[standard]
+python-multipart

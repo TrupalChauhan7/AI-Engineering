@@ -1,0 +1,30 @@
+# Automatic checks that run BEFORE every commit.
+# Install once with:  pre-commit install
+# The most important hooks here BLOCK secrets from ever entering git history.
+
+repos:
+  # --- General safety net ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key          # blocks SSH/PEM private keys
+      - id: check-added-large-files     # blocks accidentally committing big files
+        args: ["--maxkb=5000"]
+      - id: check-yaml                  # catches broken YAML (e.g. config.yaml)
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+
+  # --- Secret scanner: blocks API keys / tokens (your course key!) ---
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # --- Linter + formatter: keeps code clean automatically ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff                        # lint (auto-fixes what it can)
+        args: [--fix]
+      - id: ruff-format                 # format

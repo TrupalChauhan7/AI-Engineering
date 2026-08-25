@@ -1,0 +1,141 @@
+# =====================================================================
+# config.yaml — the ONE place every setting lives.
+# Change an experiment by editing this file, not the code.
+# =====================================================================
+
+seed: 42   # fixed random seed → reproducible runs
+
+paths:
+  dataset:          primock57
+  audio:            primock57/audio
+  transcripts_gold: primock57/transcripts        # human (gold) transcripts
+  notes_gold:       primock57/notes              # clinician notes + highlights
+  human_eval:       primock57/human_eval_data    # your answer key (RQ1)
+  results:          results
+  splits:           data/splits/consultation_split_v1.json  # frozen dev/test split (written once)
+
+split:
+  dev_size:  10           # consultations in DEV (iterate rubric here)
+  test_size: 47           # consultations in TEST (scored exactly once)
+  # Split is BY CONSULTATION and seeded (see top-level `seed`), written to
+  # paths.splits and never regenerated. Consultation IDs are derived from the
+  # transcripts folder (a leak-safe source — never from notes/ or human_eval/).
+
+transcription:            # RQ2
+  model: large-v3-turbo   # tiny|base|small|medium|large-v3|large-v3-turbo (turbo = best speed/quality)
+  language: en
+  # Whisper's STANDARD fallback schedule (Amendment 3): strict temp-0 caused
+  # trailing-silence repetition loops on 4/10 DEV consultations. The fallback
+  # fires only on segments failing Whisper's quality thresholds, so
+  # nondeterminism is confined to segments that would otherwise loop.
+  temperature: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+generation:
+  prompt_version: v1.0    # which prompt in prompts/note_generation/
+  reasoning: false        # project rule 6: generator reasoning OFF ("When Reasoning Hurts")
+
+summac:                   # tier-2 source-grounded baseline (SummaC-ZS, our impl)
+  model: cross-encoder/nli-deberta-v3-small   # NLI backbone; swap per A1.1 if dev gate fails
+  batch_size: 256
+  op1: max                # aggregate over source sentences (per note sentence)
+  op2: mean               # aggregate over note sentences (final score)
+
+claim_verifier:   # LOCKED. Built exploratorily on DEV, then PRE-REGISTERED as a
+                  # TEST endpoint before the one-shot run (Amendment 4, 19 Jul 2026).
+                  # The COMBINED score (unsupported + omitted) is the RQ1 headline
+                  # metric. Developing on DEV carries selection risk — acknowledged
+                  # in Amendment 4; the held-out TEST run is the confirmation.
+  model: llama3.1:8b         # decompose+verify LLM; Llama family ≠ gemma generator (rule 6)
+  decompose_prompt: claim_decompose_v1   # prompts/judge/
+  verify_prompt:    claim_verify_v1
+  transcript_facts_prompt: transcript_facts_v2  # omission axis: transcript -> facts (v2: FINAL)
+  omission_verify_prompt:  omission_verify_v1   # omission axis: fact present in note?
+  criticality_prompt:      claim_criticality_v1 # SECONDARY: rate unsupported claims critical/minor
+  nli_unsupported_threshold: 0.5   # secondary NLI verifier: claim unsupported if max entail < this
+
+judge:                       # FROZEN final judge — config 3/3 of the ≤3 allowed on DEV
+  prompt_version: v1.2       # Selene-Mini absolute-rubric format (v1.0/v1.1 kept for history)
+  model:   atla/selene-mini  # purpose-built evaluator, Llama-3.1-8B family (≠ gemma generator)
+  mode:    rubric_absolute   # json (v1.0/v1.1) | rubric_absolute (v1.2 Selene)
+  rubric_scale: 5            # Selene 1–5 score -> faithfulness (N-1)/4 ; fits the 8B HW ceiling
+  reasoning: false           # Selene reasons in TEXT (its trained format), not Ollama think-mode
+
+alarm:                    # THE STAR
+  # Verdict bands on the claim verifier's COMBINED error count
+  # (n_unsupported + n_omitted; HIGHER = worse). Used by s2n.alarm.flagger and
+  # the demo service. Replaces the old placeholder `faithfulness_threshold: 0.7`,
+  # which was a 0–1 fraction and therefore incommensurable with a count.
+  #
+  # PROTOTYPE — calibrated on the DEV machine-note distribution ONLY (n=40):
+  #   min 2 | q1 7 | median 9 | q3 12 | p90 15 | max 22
+  # Bands = the DEV quartiles, so each band is a real third of the DEV data:
+  #   reliable   : combined <= 7   (DEV q1  — best quartile)   -> 13/40 notes
+  #   review     : 8 .. 11         (DEV IQR)                   -> 13/40 notes
+  #   unreliable : combined >= 12  (DEV q3  — worst quartile)  -> 14/40 notes
+  # NOTE we do NOT use "reliable iff combined == 0": no DEV note scores below 2,
+  # so a zero-band would never fire and the traffic light would have a dead colour.
+  #
+  # NOT a validated clinical operating point. On held-out TEST the verifier's
+  # correlation with human error counts reached only 0.48x the human ceiling
+  # (rho 0.260 vs ceiling 0.541), and no metric separated distinguishably from
+  # another. These are DEMO bands for the A3 prototype — they show the alarm's
+  # mechanism, they do not certify a note as safe.
+  reliable_max: 7
+  unreliable_min: 12
+
+demo:
+  # THE DEMO IS NOT THE RESEARCH. Everything above this block is sealed: RQ2 was
+  # measured on `transcription.model: large-v3-turbo` and those numbers are
+  # already computed, so nothing here can move a result.
+  #
+  # The live-upload path in the Clarion app swaps ONLY the ASR model, because
+  # large-v3-turbo on CPU takes minutes per consultation and a viva demo that
+  # looks frozen is a failed demo. `base` transcribes a short clip in seconds at
+  # a WER good enough to show the alarm working.
+  #
+  # Cached samples (scripts/build_samples.py) still use the research model — the
+  # numbers on screen for a sample are the real pipeline's.
+  transcription_model: base   # tiny|base|small — demo only, never used for RQ1/RQ2
+  # A stage that outruns this is reported as an error rather than hanging.
+  stage_timeout_s: 300
+
+flagging:
+  # EXPLORATORY companion to §B7 (Amendment 5, 21 Aug 2026, pre-TEST).
+  # §B7's pre-registered positive class (errors_critical >= 1) is SATURATED on DEV
+  # machine notes (base rate 1.000 -> PR-AUC undefined), so we add one clearly
+  # labelled exploratory class alongside it. The pre-registered §B7 is retained.
+  # tau = 75th percentile of errors_total on DEV machine notes (n=40) = 15.8
+  #   (numpy linear interpolation gives 15.799999999999999; errors_total is always a
+  #    multiple of 0.2, being a mean of 5 integer counts, so 15.8 classifies identically).
+  # DEV base rate at this tau = 0.25 (10/40). FROZEN LITERAL — applied unchanged to
+  # TEST, never recomputed on the split being scored.
+  exploratory_errors_total_threshold: 15.8
+
+llm:                      # backend-agnostic; the rest of the code never names a vendor
+  backend: ollama         # ollama (free, local) | course_api | openai
+  model:   medgemma:4b    # generator (Stage-1 pick); control = llama3.1:8b
+  host:    http://localhost:11434
+  timeout: 1200           # seconds; first call includes model load
+  temperature: 0          # deterministic decoding (reproducible)
+  num_ctx: 8192           # context window; Ollama defaults to 4096 which truncates long transcripts
+
+synthetic_probe:
+  # EXPLORATORY external-validity extension (self-built 43-consultation dataset).
+  # NOT part of the pre-registered RQ1/RQ2 and NOT a TEST endpoint. It reuses the
+  # LOCKED generator / claim_verifier / alarm blocks above exactly as they stand;
+  # nothing in this block can change an RQ1 or RQ2 number.
+  #
+  # WHY it exists: RQ1 validated the alarm against NOISY human labels (rho ~0.26).
+  # Here we author the errors, so the label is EXACT and we can ask whether the
+  # alarm RESPONDS to a known, dosed perturbation -- including the omission axis,
+  # its known blind spot.
+  keys_dir: data/synthetic/keys          # 43 scripts, copied verbatim; gitignored
+  seed: 42                               # per-consultation streams derive from this
+  halluc_doses: [1, 2, 3]                # planted hallucinations per condition
+  omission_dose: 1                       # deleted real facts per condition
+  injection_catalogue: config/injection_catalogue.yaml   # hand-written; no LLM
+  # Min fraction of a note sentence's content tokens that must appear in ONE
+  # transcript turn before it may be deleted as an omission target. Higher =
+  # stricter proof the deleted fact was genuinely in the transcript.
+  omission_match_threshold: 0.45
+  n_boot: 5000                           # matches the RQ1 cluster-bootstrap convention

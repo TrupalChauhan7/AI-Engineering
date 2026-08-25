@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Clarion design tokens — dark editorial.
+   Depth comes from value and 1px hairlines. No glow, no gradient on UI,
+   no drop shadows. Colour appears ONLY in the alarm.
+   ========================================================================== */
+
+@theme {
+  /* --- surface + ink ---------------------------------------------------- */
+  --color-canvas: #0a0a0b;
+  --color-surface: #141414;
+  --color-ink: #f4f4f5;
+  /* The three dim tiers were lifted one step for legibility on this canvas —
+     long transcript text at 7:1 read grey and tiring. The reference tokens
+     (#9A9A9F / #6E6E73 / #5E5E63) measured 7.06 / 3.90 / 3.07:1; the last two
+     were also under the 4.5:1 WCAG AA floor while carrying 11px mono labels.
+     The four-step hierarchy is preserved and strictly descending. */
+  --color-ink-2: #bcbcc2; /* 10.47:1 — secondary text generally */
+  /* One notch brighter again, for the one surface you actually READ at
+     length: a full consultation transcript. Scoped to that so the rest of
+     the secondary tier keeps its distance from --color-ink. */
+  --color-ink-read: #cdcdd2; /* 12.72:1 — transcript body */
+  --color-ink-mute: #9d9da2; /* 7.33:1  — labels, marginalia */
+  --color-ink-faint: #8a8a8f; /* 5.76:1  — the quietest tier */
+
+  --color-hairline: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.28);
+
+  /* --- SIGNAL: the only colour in the product, reserved for the alarm --- */
+  --color-sig-red: #e0574f;
+  --color-sig-amber: #d9a441;
+  --color-sig-green: #6fb98a;
+
+  /* --- type ------------------------------------------------------------- */
+  --font-display: var(--font-cormorant), ui-serif, Georgia, serif;
+  --font-ui: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* --- motion ----------------------------------------------------------- */
+  --ease-editorial: cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+html {
+  background: var(--color-canvas);
+  /* Lenis drives scrolling; never fight it with native smooth scroll. */
+  scroll-behavior: auto;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Lenis: it transforms a wrapper, so the page must not also scroll natively */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+::selection {
+  background: rgba(244, 244, 245, 0.16);
+}
+
+/* Visible, on-brand focus — never remove the ring (a11y) */
+:focus-visible {
+  outline: 1px solid var(--color-border-strong);
+  outline-offset: 3px;
+}
+
+/* ==========================================================================
+   Type primitives (the scale from the design reference)
+   ========================================================================== */
+
+.t-hero {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(3rem, 8.2vw, 6.5rem); /* -> 104px */
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+}
+
+.t-section {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(2rem, 4vw, 2.875rem); /* -> 46px */
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.t-verdict {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(2.25rem, 4.6vw, 3.375rem); /* -> 54px */
+  line-height: 1;
+}
+
+.t-body {
+  font-size: 1.125rem;
+  line-height: 1.65;
+}
+
+.t-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem; /* 11px */
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.t-note {
+  font-family: var(--font-mono);
+  font-size: 0.84375rem; /* 13.5px */
+  line-height: 2;
+}
+
+/* ==========================================================================
+   Reusable atoms
+   ========================================================================== */
+
+.hairline {
+  border-color: var(--color-hairline);
+}
+
+/* Outline button: border-opacity + 1px letter-spacing on hover (§6.4) */
+.btn-outline {
+  border: 1px solid var(--color-border-strong);
+  padding: 0.875rem 1.75rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--color-ink);
+  background: transparent;
+  transition:
+    border-color 0.3s var(--ease-editorial),
+    letter-spacing 0.3s var(--ease-editorial),
+    color 0.3s var(--ease-editorial);
+}
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--color-ink);
+  letter-spacing: 0.08em;
+}
+.btn-outline:disabled {
+  color: var(--color-ink-faint);
+  border-color: var(--color-hairline);
+  cursor: not-allowed;
+}
+
+/* Panel scrollers.
+   `data-lenis-prevent` on the same element stops Lenis swallowing the wheel —
+   without it these panels look unscrollable. The bar is always rendered rather
+   than overlay-on-scroll, because an invisible scrollbar on a dark panel gives
+   no hint the content continues. */
+.scroll-panel {
+  overscroll-behavior: contain; /* don't chain to the page at either end */
+}
+
+/* Chrome/Safari. NOTE: setting `scrollbar-width` on the same element makes
+   Chrome 121+ ignore every ::-webkit-scrollbar rule below and fall back to the
+   auto-hiding overlay bar — which is the "there is no scrollbar" symptom. The
+   standard properties are therefore scoped to Firefox further down. */
+.scroll-panel::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+.scroll-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Firefox has no ::-webkit pseudo-elements; give it the standard properties. */
+@supports (-moz-appearance: none) {
+  .scroll-panel {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+}
+
+/* The flagged span in the note: dotted underline that DRAWS in during the scan */
+.flagged {
+  color: var(--color-sig-red);
+  position: relative;
+  transition: color 0.45s var(--ease-editorial);
+}
+.flagged::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 1px;
+  width: 100%;
+  border-bottom: 1px dotted var(--color-sig-red);
+  transform: scaleX(var(--underline, 0));
+  transform-origin: left;
+  transition: transform 0.5s var(--ease-editorial);
+}
+.flagged[data-drawn="true"]::after {
+  --underline: 1;
+}
+
+/* Cross-link highlight when hovering a flag in the rail (§6.4) */
+.flagged[data-linked="true"] {
+  background: rgba(224, 87, 79, 0.12);
+}
+
+/* ==========================================================================
+   Reduced motion: resolve to final state, keep everything usable (§6.5)
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .flagged::after {
+    --underline: 1;
+  }
+}

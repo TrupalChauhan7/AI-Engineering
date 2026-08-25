@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "s2n"
+version = "0.1.0"
+description = "Speech-to-Clinical-Note: faithfulness evaluation and a reliability alarm for LLM-generated SOAP notes."
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# The demo API (app/) is not an installed package — it is run in place from the
+# repo root (`uvicorn app.api.main:app`). Put the root on sys.path so tests can
+# import it the same way the server does.
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+# --- Code style / linting (used by the ruff pre-commit hook) ---
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]   # pycodestyle errors, pyflakes, import sorting

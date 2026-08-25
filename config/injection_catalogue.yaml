@@ -1,0 +1,52 @@
+# =====================================================================
+# injection_catalogue.yaml — the hand-written hallucination catalogue for
+# the EXPLORATORY synthetic alarm probe (pipelines/12_synth_alarm_probe.py).
+#
+# WHY hand-written: the defensibility of this study rests on the labels being
+# EXACT. If an LLM authored (or chose) the planted errors, the label would
+# inherit the LLM's mistakes and we would be back to noisy supervision. Every
+# sentence below was written by a human; nothing in the labelling loop is a
+# model call.
+#
+# `keyword` is the absence test. A catalogue entry may only be planted in a
+# consultation whose transcript does NOT contain that keyword (case-insensitive
+# substring). That check proves the planted fact is absent FROM THE TRANSCRIPT
+# AS STATED — a paraphrase collision ("BP 180/100" without the words "blood
+# pressure") is possible but rare, and every skip is logged so the rate is
+# visible rather than assumed.
+#
+# Keywords are deliberately stemmed/truncated ("smok", "pregnan") so they catch
+# inflections ("smoking", "smoker", "pregnancy", "pregnant").
+# =====================================================================
+
+catalogue:
+  - sentence: "The patient reports a documented allergy to penicillin."
+    keyword: penicillin
+  - sentence: "The patient has a family history of type 2 diabetes."
+    keyword: diabetes
+  - sentence: "The patient's temperature was recorded at 39.1C."
+    keyword: temperature
+  - sentence: "The patient reports smoking 20 cigarettes per day."
+    keyword: smok
+  - sentence: "The patient recently returned from travel abroad."
+    keyword: travel
+  - sentence: "The patient is currently taking warfarin."
+    keyword: warfarin
+  - sentence: "The patient reports unintentional weight loss over three months."
+    keyword: weight loss
+  - sentence: "The patient has a known history of asthma."
+    keyword: asthma
+  - sentence: "The patient reports night sweats over the past two weeks."
+    keyword: night sweat
+  - sentence: "The patient's blood pressure was 180/100 mmHg."
+    keyword: blood pressure
+  - sentence: "The patient reports blood in the urine."
+    keyword: urine
+  - sentence: "The patient is 12 weeks pregnant."
+    keyword: pregnan
+  - sentence: "The patient reports a persistent cough for one month."
+    keyword: cough
+  - sentence: "The patient has a previous history of deep vein thrombosis."
+    keyword: thrombosis
+  - sentence: "The patient drinks approximately 30 units of alcohol per week."
+    keyword: alcohol

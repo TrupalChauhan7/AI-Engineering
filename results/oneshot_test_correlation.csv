@@ -1,0 +1,7 @@
+metric,rho,lo,hi,label
+claims_neg_combined,0.2596,0.0803,0.4241,Claim verifier (combined)
+levenshtein,0.2455,0.0767,0.4003,Levenshtein
+judge_selene,0.2019,0.0492,0.3447,Selene judge
+summac,0.1862,0.0104,0.357,SummaC
+rougeL,0.1312,-0.0631,0.3295,ROUGE-L
+bertscore,0.0597,-0.1187,0.2323,BERTScore
