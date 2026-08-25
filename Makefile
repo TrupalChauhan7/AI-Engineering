@@ -17,7 +17,7 @@ test:         ## run unit tests
 	pytest -q
 
 demo:         ## run the Clarion demo (FastAPI :8000 + Next.js :3000)
-	./scripts/dev.sh
+	python scripts/dev.py
 
 samples:      ## pre-compute the demo sample consultations (gitignored output)
 	python scripts/build_samples.py

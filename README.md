@@ -151,3 +151,23 @@ A1_plan/ A2_progress/ A3_final/   coursework deliverables
 ## Cost
 Runs **entirely free**: Whisper is open-source and local; metrics are open-source;
 the LLM uses a free backend (course API or local Ollama). No paid APIs required.
+
+## Running on Windows (cross-platform)
+
+The Python code is OS-agnostic (`pathlib` throughout; audio mixing is pure Python). To run on
+Windows — e.g. an RTX 5060 lab laptop — install Python 3.10+, Node 20+, **Ollama for Windows**, and
+**ffmpeg** on `PATH` (Whisper needs it: `winget install Gyan.FFmpeg`), then:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e .
+ollama pull medgemma:4b ; ollama pull llama3.1:8b ; ollama pull atla/selene-mini
+pytest
+python scripts/dev.py     # demo: FastAPI :8000 + Next.js :3000 (cross-platform; replaces `make demo`)
+```
+
+**Note:** the LoRA fine-tuning pipelines (`10`, `12_finetune_train`) use Apple **MLX** and run on
+Apple-Silicon Macs only; that experiment is complete and its results are in `results/finetune/`.
+Everything else — transcription, generation, the alarm, and the demo — runs on any OS.

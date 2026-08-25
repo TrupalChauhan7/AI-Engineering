@@ -24,8 +24,16 @@ class MLXNoteGenerator:
         prompt_version: str = "v1.0",
         max_tokens: int = 900,
     ):
-        from mlx_lm import load
-        from mlx_lm.sample_utils import make_sampler
+        try:
+            from mlx_lm import load
+            from mlx_lm.sample_utils import make_sampler
+        except ImportError as e:  # MLX is Apple-Silicon only
+            raise RuntimeError(
+                "MLXNoteGenerator needs Apple MLX (mlx-lm), which runs on Apple-Silicon "
+                "Macs only. It reproduces the Track-B LoRA fine-tuning experiment, whose "
+                "results are already saved in results/finetune/. On Windows/NVIDIA, skip "
+                "pipelines 10 and 12_finetune_train; everything else is cross-platform."
+            ) from e
 
         self.model, self.tokenizer = load(model_path, adapter_path=adapter_path)
         self.prompt = load_prompt("note_generation", prompt_version)
