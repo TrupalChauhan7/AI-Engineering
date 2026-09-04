@@ -290,7 +290,8 @@ def report(df: pd.DataFrame, logs: pd.DataFrame, cfg: dict, seed: int) -> pd.Dat
     # ---- verdict-band shift ----------------------------------------------
     print(
         "\n--- Verdict-band shift vs base (config bands: reliable <= "
-        f"{cfg['reliability']['reliable_max']} | review | unreliable >= {cfg['reliability']['unreliable_min']}) ---"
+        f"{cfg['reliability']['reliable_max']} | review | unreliable >= "
+        f"{cfg['reliability']['unreliable_min']}) ---"
     )
     rank = {b: i for i, b in enumerate(BANDS)}
     base_band = df[df.condition == "base"].set_index("consultation")["verdict_band"]
