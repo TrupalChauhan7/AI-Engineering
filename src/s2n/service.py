@@ -1,4 +1,4 @@
-"""The pipeline as ONE callable — audio/transcript -> note -> alarm, as plain JSON.
+"""The pipeline as ONE callable — audio/transcript -> note -> reliability, as plain JSON.
 
 WHY this module exists: the demo needs a single entry point, and the demo must
 not dictate the architecture. ``run_pipeline`` is a plain function returning a
@@ -15,15 +15,15 @@ knows nothing about SSE — the transport formats them.
 LEAK SAFETY (project rule 1). This module imports the transcription,
 generation, and verification paths ONLY. It does not — and must not — import
 ``s2n.data.evaluation_data`` or any loader that can reach ``primock57/notes/``
-or ``primock57/human_eval_data/``. Those are the answer key. The alarm's whole
+or ``primock57/human_eval_data/``. Those are the answer key. The reliability's whole
 claim is that it judges a note using nothing but the transcript that produced
 it, so the structural absence of an import is the guarantee; a test asserts it.
 
-WHAT THE ALARM IS. The claim verifier scores two axes against the transcript:
+WHAT THE RELIABILITY FLAG IS. The claim verifier scores two axes against the transcript:
   * incorrectness — note claims the transcript does not support
   * omission      — transcript facts the note dropped
 Their sum is the COMBINED error count, the signal that ranked first on the
-held-out TEST split. ``s2n.alarm.flagger.verdict`` turns that count into a
+held-out TEST split. ``s2n.reliability.flagger.verdict`` turns that count into a
 traffic light using the DEV-calibrated bands in config.
 
 HONEST SCOPE: those bands are a prototype (see the config comment). On TEST the
@@ -37,10 +37,10 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
-from s2n.alarm.flagger import verdict
 from s2n.config import load_config
 from s2n.evaluation.claim_verifier import ClaimVerifier
 from s2n.generation.generator import NoteGenerator
+from s2n.reliability.flagger import verdict
 from s2n.transcription.whisper_asr import WhisperTranscriber
 
 
@@ -61,8 +61,8 @@ def run_pipeline_staged(
         {"stage": "transcribe", "status": "done", "transcript": ...}
         {"stage": "generate",   "status": "running"}
         {"stage": "generate",   "status": "done", "note": ...}
-        {"stage": "alarm",      "status": "running"}
-        {"stage": "alarm",      "status": "done", "alarm": {...}}
+        {"stage": "reliability",      "status": "running"}
+        {"stage": "reliability",      "status": "done", "reliability": {...}}
         {"stage": "done",       "timings": {...}}
 
     Every payload is JSON-serialisable. A caller that wants the whole result in
@@ -87,8 +87,8 @@ def run_pipeline_staged(
     generate_s = time.perf_counter() - t0
     yield {"stage": "generate", "status": "done", "note": note}
 
-    # --- 3. note + transcript -> alarm ------------------------------------
-    yield {"stage": "alarm", "status": "running"}
+    # --- 3. note + transcript -> reliability ------------------------------------
+    yield {"stage": "reliability", "status": "running"}
     t0 = time.perf_counter()
     verifier = verifier or ClaimVerifier(cfg)
     # incorrectness axis: which note claims the transcript does not support
@@ -98,14 +98,14 @@ def run_pipeline_staged(
     facts = verifier.decompose_transcript(transcript)
     omissions = verifier.check_omissions(note, facts)
     omitted = [f for f, v in zip(omissions.facts, omissions.verdicts) if v == "absent"]
-    alarm_s = time.perf_counter() - t0
+    reliability_s = time.perf_counter() - t0
 
     n_unsupported, n_omitted = len(unsupported), len(omitted)
     band = verdict({"n_unsupported": n_unsupported, "n_omitted": n_omitted}, cfg)
     yield {
-        "stage": "alarm",
+        "stage": "reliability",
         "status": "done",
-        "alarm": {
+        "reliability": {
             "unsupported_claims": unsupported,
             "omitted_facts": omitted,
             "n_unsupported": n_unsupported,
@@ -121,7 +121,7 @@ def run_pipeline_staged(
         "timings": {
             "transcribe_s": round(transcribe_s, 3),
             "generate_s": round(generate_s, 3),
-            "alarm_s": round(alarm_s, 3),
+            "reliability_s": round(reliability_s, 3),
         },
     }
 
@@ -135,7 +135,7 @@ def run_pipeline(
     generator: NoteGenerator | None = None,
     verifier: ClaimVerifier | None = None,
 ) -> dict:
-    """Run audio/transcript -> SOAP note -> reliability alarm, all in one go.
+    """Run audio/transcript -> SOAP note -> reliability flag, all in one go.
 
     Supply ``audio_path`` to transcribe with Whisper, or ``transcript`` to skip
     ASR (the demo pre-caches sample transcripts so it can respond instantly).
@@ -150,11 +150,11 @@ def run_pipeline(
 
         {"transcript": str,
          "note": str,
-         "alarm": {"unsupported_claims": [...], "omitted_facts": [...],
+         "reliability": {"unsupported_claims": [...], "omitted_facts": [...],
                    "n_unsupported": int, "n_omitted": int, "combined": int,
                    "verdict": "reliable"|"review"|"unreliable",
                    "score_note": str},
-         "timings": {"transcribe_s": float, "generate_s": float, "alarm_s": float}}
+         "timings": {"transcribe_s": float, "generate_s": float, "reliability_s": float}}
     """
     out: dict = {}
     for event in run_pipeline_staged(
@@ -168,7 +168,7 @@ def run_pipeline(
         if event.get("status") != "done" and event["stage"] != "done":
             continue
         # each terminal event carries exactly the key we still need
-        for key in ("transcript", "note", "alarm", "timings"):
+        for key in ("transcript", "note", "reliability", "timings"):
             if key in event:
                 out[key] = event[key]
     return out

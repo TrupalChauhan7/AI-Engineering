@@ -1,4 +1,4 @@
-"""The reliability ALARM — decide whether a generated note is RELIABLE or FLAGGED.
+"""The reliability flag — decide whether a generated note is RELIABLE or FLAGGED.
 
 WHY this is the star: the app is just the stage; this flag is the point. It
 turns the best faithfulness signal from RQ1 into a single deployable decision.
@@ -7,7 +7,7 @@ Signal: the claim-verifier COMBINED error count = n_unsupported + n_omitted
 (the pre-registered TEST endpoint, Amendment 4). Higher = worse. A note is
 RELIABLE when its combined count is at or below a threshold, FLAGGED otherwise.
 
-Bands: ``alarm.reliable_max`` / ``alarm.unreliable_min`` in config.yaml, CHOSEN
+Bands: ``reliability.reliable_max`` / ``reliability.unreliable_min`` in config.yaml, CHOSEN
 ON DEV ONLY (the DEV quartiles of the combined count — see the config comment).
 These are COUNT thresholds, not a 0–1 fraction; the old skeleton default of 0.7
 was a placeholder on the wrong scale.
@@ -38,7 +38,7 @@ def verdict(note_eval: dict, cfg: dict | None = None) -> dict:
     Returns a JSON-serialisable dict — plain str/int only — so an API layer can
     hand it straight to a frontend.
     """
-    bands = (cfg or load_config())["alarm"]
+    bands = (cfg or load_config())["reliability"]
     lo, hi = int(bands["reliable_max"]), int(bands["unreliable_min"])
     combined = _combined(note_eval)
     if combined <= lo:
@@ -74,7 +74,7 @@ def flag(note_eval: dict, cfg: dict | None = None, threshold: float | None = Non
     is the combined error count (higher = less reliable).
     """
     if threshold is None:
-        threshold = (cfg or load_config())["alarm"]["reliable_max"]
+        threshold = (cfg or load_config())["reliability"]["reliable_max"]
     combined = _combined(note_eval)
     reliable = combined <= threshold
 

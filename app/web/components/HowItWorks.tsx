@@ -8,7 +8,7 @@ const STEPS = [
   { n: "02", label: "Whisper", note: "Local ASR → transcript" },
   { n: "03", label: "MedGemma 4B", note: "Transcript → SOAP note" },
   { n: "04", label: "Claim verifier", note: "Every claim checked against the transcript" },
-  { n: "05", label: "Alarm", note: "Unsupported + omitted → verdict" },
+  { n: "05", label: "Reliability", note: "Unsupported + omitted → verdict" },
 ];
 
 export default function HowItWorks() {

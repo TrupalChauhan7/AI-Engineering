@@ -1,6 +1,6 @@
-"""The reliability alarm: threshold logic on the combined error count."""
+"""The reliability flag: threshold logic on the combined error count."""
 
-from s2n.alarm.flagger import flag
+from s2n.reliability.flagger import flag
 
 
 def test_reliable_at_or_below_threshold():
@@ -25,6 +25,6 @@ def test_accepts_precomputed_combined():
 
 
 def test_threshold_defaults_to_config():
-    # No explicit threshold -> reads alarm.reliable_max from config.
+    # No explicit threshold -> reads reliability.reliable_max from config.
     r = flag({"n_unsupported": 0, "n_omitted": 0})
     assert r["score"] == 0.0 and r["reliable"] is True  # zero errors always reliable

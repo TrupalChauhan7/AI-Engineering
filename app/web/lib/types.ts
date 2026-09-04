@@ -2,7 +2,7 @@
 
 export type Verdict = "reliable" | "review" | "unreliable";
 
-export interface Alarm {
+export interface Reliability {
   unsupported_claims: string[];
   omitted_facts: string[];
   n_unsupported: number;
@@ -23,7 +23,7 @@ export interface Span {
 export interface Timings {
   transcribe_s: number;
   generate_s: number;
-  alarm_s: number;
+  reliability_s: number;
 }
 
 export interface AnalysisResult {
@@ -32,7 +32,7 @@ export interface AnalysisResult {
   durationLabel?: string;
   transcript: string;
   note: string;
-  alarm: Alarm;
+  reliability: Reliability;
   timings: Timings;
   spans?: Span[];
 }
@@ -44,7 +44,7 @@ export interface SampleMeta {
 }
 
 /** Which stage the UI is currently revealing. */
-export type Stage = "idle" | "transcribe" | "generate" | "alarm" | "done" | "error";
+export type Stage = "idle" | "transcribe" | "generate" | "reliability" | "done" | "error";
 
 export const VERDICT_COLOR: Record<Verdict, string> = {
   reliable: "var(--color-sig-green)",

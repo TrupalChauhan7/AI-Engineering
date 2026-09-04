@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EASE, fadeUp, sectionReveal } from "@/lib/motion";
 import { useAnalysis } from "@/lib/useAnalysis";
 import type { SampleMeta } from "@/lib/types";
-import AlarmPanel from "./analysis/AlarmPanel";
+import ReliabilityPanel from "./analysis/ReliabilityPanel";
 import NotePanel from "./analysis/NotePanel";
 import TranscriptPanel from "./analysis/TranscriptPanel";
 import { Elapsed, LivePulse } from "./StageProgress";
@@ -15,7 +15,7 @@ const STAGE_LABEL: Record<string, string> = {
   idle: "Ready",
   transcribe: "Transcribing…",
   generate: "Drafting the note…",
-  alarm: "Verifying every claim…",
+  reliability: "Verifying every claim…",
   done: "Complete",
   error: "Failed",
 };
@@ -33,7 +33,7 @@ export default function Workspace() {
     // the ring scales against the real config band, not a magic number
     fetch("/api/health")
       .then((r) => (r.ok ? r.json() : null))
-      .then((h) => h?.alarm?.unreliable_min && setUnreliableMin(h.alarm.unreliable_min))
+      .then((h) => h?.reliability?.unreliable_min && setUnreliableMin(h.reliability.unreliable_min))
       .catch(() => {});
     fetch("/api/samples")
       .then((r) => (r.ok ? r.json() : []))
@@ -63,7 +63,7 @@ export default function Workspace() {
   const busy = state.stage !== "idle" && state.stage !== "done" && state.stage !== "error";
   // Reserve the tall fixed columns only once there is content; otherwise the
   // empty state opens a 544px black void above "How it works".
-  const hasContent = Boolean(state.transcript || state.note || state.alarm);
+  const hasContent = Boolean(state.transcript || state.note || state.reliability);
   const colClass = hasContent ? "lg:h-[34rem] lg:overflow-hidden" : "";
 
   return (
@@ -169,7 +169,7 @@ export default function Workspace() {
         {state.stage === "done" && state.timings && (
           <span className="t-label whitespace-nowrap text-[var(--color-ink-faint)]">
             {state.timings.transcribe_s}s · {state.timings.generate_s}s ·{" "}
-            {state.timings.alarm_s}s
+            {state.timings.reliability_s}s
           </span>
         )}
         <div className="ml-auto hidden w-40 sm:block">
@@ -205,8 +205,8 @@ export default function Workspace() {
           />
         </div>
         <div className={colClass}>
-          <AlarmPanel
-            alarm={state.alarm}
+          <ReliabilityPanel
+            reliability={state.reliability}
             unreliableMin={unreliableMin}
             stage={state.stage}
             linkedFlag={linkedFlag}
@@ -231,9 +231,9 @@ export default function Workspace() {
             <button onClick={downloadNote} className="btn-outline">
               Download .txt
             </button>
-            {state.alarm && (
+            {state.reliability && (
               <span className="t-label text-[var(--color-ink-faint)]">
-                {state.alarm.score_note}
+                {state.reliability.score_note}
               </span>
             )}
           </motion.div>

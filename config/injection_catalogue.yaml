@@ -1,6 +1,6 @@
 # =====================================================================
 # injection_catalogue.yaml — the hand-written hallucination catalogue for
-# the EXPLORATORY synthetic alarm probe (pipelines/12_synth_alarm_probe.py).
+# the EXPLORATORY synthetic reliability probe (pipelines/12_synth_reliability_probe.py).
 #
 # WHY hand-written: the defensibility of this study rests on the labels being
 # EXACT. If an LLM authored (or chose) the planted errors, the label would

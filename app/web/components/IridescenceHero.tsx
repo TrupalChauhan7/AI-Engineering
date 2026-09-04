@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
  * field displaces its own lookup coordinates, so bands stretch and fold like
  * oil on water instead of sliding.
  *
- * NOTE ON THE DESIGN SYSTEM: globals.css reserves colour for the alarm. This
+ * NOTE ON THE DESIGN SYSTEM: globals.css reserves colour for the reliability. This
  * hero background is a deliberate, scoped exception; nothing else in the app
  * gains colour from it.
  */

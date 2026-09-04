@@ -76,7 +76,7 @@ export default function NotePanel({
   const [scanning, setScanning] = useState(false);
 
   const segments = useMemo(() => segment(note, spans), [note, spans]);
-  const verifying = stage === "alarm" || stage === "done";
+  const verifying = stage === "reliability" || stage === "done";
 
   /* The sweep: measure where each flagged span sits, then draw its underline
      at the moment the scan line actually crosses it. */

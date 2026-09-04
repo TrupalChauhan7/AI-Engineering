@@ -1,16 +1,16 @@
 """Fact-controlled error injection — EXPLORATORY external-validity probe.
 
 STATUS: NOT part of the pre-registered RQ1/RQ2. This module adds a *new*
-pipeline around the LOCKED generator / claim-verifier / alarm; it does not
+pipeline around the LOCKED generator / claim-verifier / reliability; it does not
 modify, re-tune, or re-implement any of them.
 
-WHY THIS EXISTS. On PriMock57 the alarm was validated by rank-correlation
+WHY THIS EXISTS. On PriMock57 the reliability was validated by rank-correlation
 against NOISY human labels (rho ~0.26, about half the human ceiling). A
 correlation against a noisy target can only ever be a lower bound on detection,
 and it cannot say *which* errors were caught. Here we author the errors
 ourselves, so the label is EXACT: we know precisely which sentences were planted
 and which fact was deleted. That turns "does the score track human judgement?"
-into "does the alarm respond to a known, dosed perturbation?".
+into "does the reliability respond to a known, dosed perturbation?".
 
 THE DEFENSIBILITY POINT: NO LLM IN THE LABELLING LOOP. The hallucination
 catalogue is hand-written (config/injection_catalogue.yaml) and the absence
@@ -26,7 +26,7 @@ contain its keyword. That proves the planted fact is absent from the transcript
 saying "BP was 180 over 100" without the words "blood pressure" -- but rare, and
 every skip is logged so the filter's behaviour is visible rather than assumed.
 
-CIRCULARITY AVOIDANCE (the omission axis). The alarm's omission axis scores a
+CIRCULARITY AVOIDANCE (the omission axis). The reliability's omission axis scores a
 note against the fact list that ``ClaimVerifier.decompose_transcript`` extracts
 from the transcript. If we picked the fact to DELETE from that same list, a
 detection would be close to guaranteed and the number would be near-circular.
@@ -98,14 +98,59 @@ def _section_of(line: str) -> str | None:
     m = _HEADER_RE.match(line) or _INLINE_HEADER_RE.match(line)
     return m.group(1).lower() if m else None
 
+
 # Deliberately tiny. A big stopword list is a tuning knob, and a tuning knob on
 # the labelling path is exactly what this module is trying not to have.
 _STOP = {
-    "the", "a", "an", "and", "or", "but", "for", "with", "without", "of", "to",
-    "in", "on", "at", "is", "was", "are", "were", "be", "been", "has", "have",
-    "had", "that", "this", "it", "its", "as", "by", "from", "not", "no", "any",
-    "some", "he", "she", "they", "his", "her", "their", "patient", "patients",
-    "reports", "report", "reported", "denies", "denied", "states", "stated",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "for",
+    "with",
+    "without",
+    "of",
+    "to",
+    "in",
+    "on",
+    "at",
+    "is",
+    "was",
+    "are",
+    "were",
+    "be",
+    "been",
+    "has",
+    "have",
+    "had",
+    "that",
+    "this",
+    "it",
+    "its",
+    "as",
+    "by",
+    "from",
+    "not",
+    "no",
+    "any",
+    "some",
+    "he",
+    "she",
+    "they",
+    "his",
+    "her",
+    "their",
+    "patient",
+    "patients",
+    "reports",
+    "report",
+    "reported",
+    "denies",
+    "denied",
+    "states",
+    "stated",
 }
 
 
@@ -201,7 +246,7 @@ def inject_hallucinations(
     Doses NEST: called with a freshly-seeded rng per dose, the permutation is
     identical, so the +2H set is the +1H set plus one. That is what makes the
     dose axis paired and monotone BY CONSTRUCTION OF THE INJECTION -- the open
-    question this study asks is whether the ALARM's response rises with it.
+    question this study asks is whether the reliability flag's response rises with it.
 
     Returns the new note and a log of exactly which sentences were inserted.
     """
@@ -333,7 +378,11 @@ def inject_omission(
     in_facts = None
     if facts is not None:
         ttoks = _tokens(target)
-        in_facts = any(len(ttoks & _tokens(f)) / len(ttoks) >= threshold for f in facts) if ttoks else False
+        in_facts = (
+            any(len(ttoks & _tokens(f)) / len(ttoks) >= threshold for f in facts)
+            if ttoks
+            else False
+        )
 
     return "\n".join(lines), InjectionLog(
         removed=[target],

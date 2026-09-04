@@ -7,7 +7,7 @@ evaluators agree with each other. With PriMock57's full 5-evaluator overlap we
 estimate that ceiling as the mean pairwise Spearman between evaluators on the
 error counts, then report each metric's ρ relative to it.
 
-B7 — the alarm as a binary detector: positive class = a note the humans flagged
+B7 — the reliability as a binary detector: positive class = a note the humans flagged
 with a critical error. Report PR-AUC per metric, cluster-bootstrapped over
 consultations (the score fed in is the *unreliability* direction, higher = more
 likely positive).

@@ -1,6 +1,6 @@
 """Fact-controlled injection: the planted errors must be exactly what we claim.
 
-These tests guard the DEFENSIBILITY of the exploratory alarm probe. The whole
+These tests guard the DEFENSIBILITY of the exploratory reliability probe. The whole
 study rests on the labels being exact, so what is asserted here is not "the code
 runs" but "the label is true": every planted hallucination is genuinely absent
 from its transcript, the omission genuinely removes the target, and the same
@@ -20,29 +20,33 @@ from s2n.evaluation.fact_injection import (
     usable_entries,
 )
 
-TRANSCRIPT = "\n".join([
-    "Good morning, what brings you in today?",
-    "I have had a sore throat for three days and it hurts to swallow.",
-    "Any fever?",
-    "I felt hot last night but did not take my temperature.",
-    "Do you smoke?",
-    "No, I have never smoked.",
-    "Any medical conditions?",
-    "I have high blood pressure and I take ramipril for it.",
-])
+TRANSCRIPT = "\n".join(
+    [
+        "Good morning, what brings you in today?",
+        "I have had a sore throat for three days and it hurts to swallow.",
+        "Any fever?",
+        "I felt hot last night but did not take my temperature.",
+        "Do you smoke?",
+        "No, I have never smoked.",
+        "Any medical conditions?",
+        "I have high blood pressure and I take ramipril for it.",
+    ]
+)
 
-NOTE = "\n".join([
-    "Subjective:",
-    "Sore throat for three days with pain on swallowing.",
-    "Subjective feeling of fever last night.",
-    "History of high blood pressure, taking ramipril.",
-    "Objective:",
-    "Not examined.",
-    "Assessment:",
-    "Likely viral pharyngitis.",
-    "Plan:",
-    "Simple analgesia and safety netting.",
-])
+NOTE = "\n".join(
+    [
+        "Subjective:",
+        "Sore throat for three days with pain on swallowing.",
+        "Subjective feeling of fever last night.",
+        "History of high blood pressure, taking ramipril.",
+        "Objective:",
+        "Not examined.",
+        "Assessment:",
+        "Likely viral pharyngitis.",
+        "Plan:",
+        "Simple analgesia and safety netting.",
+    ]
+)
 
 CFG = load_config()
 CATALOGUE = load_catalogue(CFG)
@@ -148,18 +152,20 @@ def test_streams_differ_by_consultation_but_not_by_run_order():
 # MedGemma-4B writes one paragraph per section with the label INLINE
 # ("**Subjective:** Patient reports ..."), not as standalone header lines. The
 # fixtures above use the tidy form, so this guards the real one.
-INLINE_NOTE = "\n".join([
-    "**SOAP Note**",
-    "",
-    "**Subjective:** Sore throat for three days with pain on swallowing. "
-    "History of high blood pressure, taking ramipril.",
-    "",
-    "**Objective:** (Not provided in transcript)",
-    "",
-    "**Assessment:** Likely viral pharyngitis.",
-    "",
-    "**Plan:** Simple analgesia and safety netting.",
-])
+INLINE_NOTE = "\n".join(
+    [
+        "**SOAP Note**",
+        "",
+        "**Subjective:** Sore throat for three days with pain on swallowing. "
+        "History of high blood pressure, taking ramipril.",
+        "",
+        "**Objective:** (Not provided in transcript)",
+        "",
+        "**Assessment:** Likely viral pharyngitis.",
+        "",
+        "**Plan:** Simple analgesia and safety netting.",
+    ]
+)
 
 
 def test_inline_header_note_gets_hallucinations_in_the_subjective_block():

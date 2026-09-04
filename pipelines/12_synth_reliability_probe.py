@@ -1,13 +1,13 @@
-"""Fact-controlled ALARM PROBE on the self-built 43-consultation dataset.
+"""Fact-controlled RELIABILITY PROBE on the self-built 43-consultation dataset.
 
 STATUS: EXPLORATORY external-validity extension. NOT pre-registered, NOT part of
 RQ1/RQ2, and it touches nothing that is. It reuses the LOCKED generator, claim
-verifier and alarm exactly as configured -- same prompts, same models,
+verifier and reliability exactly as configured -- same prompts, same models,
 temperature 0, reasoning off, num_ctx 8192 -- and wraps a new pipeline around
 them. The PriMock57 code, the sealed TEST split and the pre-registration are
 untouched.
 
-THE QUESTION. RQ1 validated the alarm by rank-correlation against NOISY human
+THE QUESTION. RQ1 validated the reliability by rank-correlation against NOISY human
 labels (rho ~0.26, ~0.48x the human ceiling). That is a lower bound, and it
 cannot say which errors were caught. Here we AUTHOR the errors, so the label is
 exact:
@@ -19,7 +19,7 @@ exact:
     -1O    base with one genuinely transcribed fact deleted
 
 The injected DOSE is monotone by construction -- we put the errors there. What
-is NOT given is whether the alarm's combined flag count RESPONDS to that dose.
+is NOT given is whether the reliability's combined flag count RESPONDS to that dose.
 That response, measured paired within each consultation, is the endpoint.
 
 NO LLM IN THE LABELLING LOOP: the hallucination catalogue is hand-written and
@@ -33,9 +33,9 @@ DATA SAFETY. The score CSVs carry IDs, counts and verdicts only. Everything
 containing clinical text -- the injection detail log and the note/fact cache --
 is written under results/, which .gitignore excludes in full.
 
-Run:  python pipelines/12_synth_alarm_probe.py --limit 3     # fast smoke
-      python pipelines/12_synth_alarm_probe.py               # full 43
-      python pipelines/12_synth_alarm_probe.py --no-figure
+Run:  python pipelines/12_synth_reliability_probe.py --limit 3     # fast smoke
+      python pipelines/12_synth_reliability_probe.py               # full 43
+      python pipelines/12_synth_reliability_probe.py --no-figure
 """
 
 from __future__ import annotations
@@ -47,7 +47,6 @@ import re
 import numpy as np
 import pandas as pd
 
-from s2n.alarm.flagger import verdict
 from s2n.config import ROOT, load_config
 from s2n.evaluation.claim_verifier import ClaimVerifier
 from s2n.evaluation.fact_injection import (
@@ -57,6 +56,7 @@ from s2n.evaluation.fact_injection import (
     load_catalogue,
 )
 from s2n.generation.generator import NoteGenerator
+from s2n.reliability.flagger import verdict
 
 BANDS = ["reliable", "review", "unreliable"]
 SCORES_CSV = ROOT / "results" / "synth_probe_scores.csv"
@@ -95,8 +95,15 @@ def _save_cache(cache: dict) -> None:
 # --------------------------------------------------------------------------
 # conditions
 # --------------------------------------------------------------------------
-def build_conditions(cid: str, base_note: str, transcript: str, cfg: dict, seed: int,
-                     catalogue: list[dict], facts: list[str]) -> tuple[dict, list[dict]]:
+def build_conditions(
+    cid: str,
+    base_note: str,
+    transcript: str,
+    cfg: dict,
+    seed: int,
+    catalogue: list[dict],
+    facts: list[str],
+) -> tuple[dict, list[dict]]:
     """The five notes for one consultation, plus the detail log for each.
 
     Each condition re-derives its rng from (seed, cid) so the hallucination
@@ -112,17 +119,21 @@ def build_conditions(cid: str, base_note: str, transcript: str, cfg: dict, seed:
         notes[f"+{k}H"] = note
         logs.append({**log.__dict__, "consultation": cid, "condition": f"+{k}H"})
     note, log = inject_omission(
-        base_note, transcript, consultation_rng(seed, cid),
-        sp["omission_match_threshold"], facts=facts,
+        base_note,
+        transcript,
+        consultation_rng(seed, cid),
+        sp["omission_match_threshold"],
+        facts=facts,
     )
     notes[f"-{sp['omission_dose']}O"] = note
     logs.append({**log.__dict__, "consultation": cid, "condition": f"-{sp['omission_dose']}O"})
     return notes, logs
 
 
-def score_note(verifier: ClaimVerifier, transcript: str, note: str, facts: list[str],
-               cfg: dict) -> dict:
-    """The LOCKED alarm, in the same order as s2n.service.run_pipeline_staged."""
+def score_note(
+    verifier: ClaimVerifier, transcript: str, note: str, facts: list[str], cfg: dict
+) -> dict:
+    """The LOCKED reliability, in the same order as s2n.service.run_pipeline_staged."""
     rep = verifier.score(transcript, note)
     omit = verifier.check_omissions(note, facts)
     band = verdict({"n_unsupported": rep.n_unsupported, "n_omitted": omit.n_omitted}, cfg)
@@ -164,8 +175,10 @@ def _paired(df: pd.DataFrame, condition: str, col: str) -> pd.DataFrame:
     """Per-consultation delta of ``col`` between a condition and its base."""
     base = df[df.condition == "base"].set_index("consultation")[col]
     cond = df[df.condition == condition].set_index("consultation")[col]
-    return pd.DataFrame({"base": base, "cond": cond}).dropna().assign(
-        delta=lambda d: d["cond"] - d["base"]
+    return (
+        pd.DataFrame({"base": base, "cond": cond})
+        .dropna()
+        .assign(delta=lambda d: d["cond"] - d["base"])
     )
 
 
@@ -178,28 +191,41 @@ def report(df: pd.DataFrame, logs: pd.DataFrame, cfg: dict, seed: int) -> pd.Dat
     n_cons = df.consultation.nunique()
     omit_cond = f"-{sp['omission_dose']}O"
 
-    print(f"\n{'=' * 78}\nSYNTHETIC ALARM PROBE -- EXPLORATORY (not pre-registered)"
-          f"\n{n_cons} consultations x {df.condition.nunique()} conditions "
-          f"= {len(df)} scored notes\n{'=' * 78}")
+    print(
+        f"\n{'=' * 78}\nSYNTHETIC RELIABILITY PROBE -- EXPLORATORY (not pre-registered)"
+        f"\n{n_cons} consultations x {df.condition.nunique()} conditions "
+        f"= {len(df)} scored notes\n{'=' * 78}"
+    )
     print("Bootstrap: 1 observation per consultation per condition, so the cluster")
-    print(f"bootstrap reduces to a plain nonparametric bootstrap over the {n_cons} "
-          "consultations.")
+    print(
+        f"bootstrap reduces to a plain nonparametric bootstrap over the {n_cons} " "consultations."
+    )
 
     # ---- PRIMARY: dose-response -----------------------------------------
-    print("\n--- PRIMARY: dose-response of the alarm's COMBINED flag count ---")
+    print("\n--- PRIMARY: dose-response of the reliability's COMBINED flag count ---")
     print("The injected dose is monotone BY CONSTRUCTION (we planted the errors).")
-    print("What is measured here is whether the ALARM's response rises with it.")
+    print("What is measured here is whether the reliability flag's response rises with it.")
     rows = []
     for k in sp["halluc_doses"]:
         p = _paired(df, f"+{k}H", "combined")
         mean, lo, hi = bootstrap_mean_ci(p["delta"].to_numpy(), n_boot, seed)
         u = _paired(df, f"+{k}H", "n_unsupported")
         rmean, rlo, rhi = bootstrap_mean_ci((u["delta"] / k).to_numpy(), n_boot, seed)
-        rows.append({"dose": k, "n": len(p), "mean_delta_combined": round(mean, 3),
-                     "lo": round(lo, 3), "hi": round(hi, 3),
-                     "recovery_per_planted_fact": round(rmean, 3),
-                     "recovery_lo": round(rlo, 3), "recovery_hi": round(rhi, 3)})
-        print(f"  +{k}H  mean d(combined) = {mean:+.2f}  95% CI [{lo:+.2f}, {hi:+.2f}]  (n={len(p)})")
+        rows.append(
+            {
+                "dose": k,
+                "n": len(p),
+                "mean_delta_combined": round(mean, 3),
+                "lo": round(lo, 3),
+                "hi": round(hi, 3),
+                "recovery_per_planted_fact": round(rmean, 3),
+                "recovery_lo": round(rlo, 3),
+                "recovery_hi": round(rhi, 3),
+            }
+        )
+        print(
+            f"  +{k}H  mean d(combined) = {mean:+.2f}  95% CI [{lo:+.2f}, {hi:+.2f}]  (n={len(p)})"
+        )
     dose_tbl = pd.DataFrame(rows)
     monotone = dose_tbl.mean_delta_combined.is_monotonic_increasing
     print(f"  monotone increase across doses: {'YES' if monotone else 'NO'} (reported as-is)")
@@ -208,16 +234,18 @@ def report(df: pd.DataFrame, logs: pd.DataFrame, cfg: dict, seed: int) -> pd.Dat
     print("\n--- Hallucination recovery: new UNSUPPORTED claims per planted fact ---")
     print("  1.00 would mean every planted lie surfaced as exactly one new unsupported claim.")
     for r in rows:
-        print(f"  +{r['dose']}H  d(n_unsupported)/dose = {r['recovery_per_planted_fact']:+.2f}"
-              f"  95% CI [{r['recovery_lo']:+.2f}, {r['recovery_hi']:+.2f}]")
+        print(
+            f"  +{r['dose']}H  d(n_unsupported)/dose = {r['recovery_per_planted_fact']:+.2f}"
+            f"  95% CI [{r['recovery_lo']:+.2f}, {r['recovery_hi']:+.2f}]"
+        )
 
     # ---- omission detection ----------------------------------------------
-    print(f"\n--- Omission detection ({omit_cond}): the alarm's known blind spot ---")
+    print(f"\n--- Omission detection ({omit_cond}): the reliability's known blind spot ---")
     p = _paired(df, omit_cond, "n_omitted")
     attempted = logs[(logs.condition == omit_cond) & (logs.removed.map(len) > 0)]
     attempted_ids = set(attempted.consultation)
     p_att = p[p.index.isin(attempted_ids)]
-    det = (p_att["delta"] > 0)
+    det = p_att["delta"] > 0
     mean, lo, hi = bootstrap_mean_ci(det.to_numpy(float), n_boot, seed)
     print("  Target = a grounded sentence from the SUBJECTIVE/OBJECTIVE sections only")
     print("  (pre-declared before the full run). The omission axis measures whether a")
@@ -227,61 +255,77 @@ def report(df: pd.DataFrame, logs: pd.DataFrame, cfg: dict, seed: int) -> pd.Dat
     print("  HEADLINE (target chosen INDEPENDENTLY of the verifier's fact list -- see")
     print("  fact_injection docstring on circularity avoidance; the restriction is by note")
     print("  SECTION, which the verifier never sees):")
-    print(f"    n_omitted increased in {int(det.sum())}/{len(p_att)} = {mean:.3f} "
-          f"95% CI [{lo:.3f}, {hi:.3f}]")
+    print(
+        f"    n_omitted increased in {int(det.sum())}/{len(p_att)} = {mean:.3f} "
+        f"95% CI [{lo:.3f}, {hi:.3f}]"
+    )
     dmean, dlo, dhi = bootstrap_mean_ci(p_att["delta"].to_numpy(), n_boot, seed)
     print(f"    mean d(n_omitted) = {dmean:+.2f}  95% CI [{dlo:+.2f}, {dhi:+.2f}]")
     skipped = len(p) - len(p_att)
     if skipped:
-        print(f"    ({skipped} consultation(s) had no S/O sentence grounded at or above "
-              f"threshold {sp['omission_match_threshold']} -- no omission injected, excluded)")
+        print(
+            f"    ({skipped} consultation(s) had no S/O sentence grounded at or above "
+            f"threshold {sp['omission_match_threshold']} -- no omission injected, excluded)"
+        )
     cand = logs[logs.condition == omit_cond]["n_candidates"]
-    print(f"    eligible S/O targets per consultation: median {cand.median():.0f} "
-          f"(min {cand.min()}, max {cand.max()})")
+    print(
+        f"    eligible S/O targets per consultation: median {cand.median():.0f} "
+        f"(min {cand.min()}, max {cand.max()})"
+    )
 
     in_facts = set(attempted[attempted.in_verifier_facts == True].consultation)  # noqa: E712
     p_up = p_att[p_att.index.isin(in_facts)]
     print("  DIAGNOSTIC -- UPPER BOUND (restricted to targets that happened to also appear")
     print("  in the verifier's own fact list; NOT the headline, it is partly circular):")
     if len(p_up):
-        det_u = (p_up["delta"] > 0)
+        det_u = p_up["delta"] > 0
         umean, ulo, uhi = bootstrap_mean_ci(det_u.to_numpy(float), n_boot, seed)
-        print(f"    n_omitted increased in {int(det_u.sum())}/{len(p_up)} = {umean:.3f} "
-              f"95% CI [{ulo:.3f}, {uhi:.3f}]")
+        print(
+            f"    n_omitted increased in {int(det_u.sum())}/{len(p_up)} = {umean:.3f} "
+            f"95% CI [{ulo:.3f}, {uhi:.3f}]"
+        )
     else:
         print("    no target overlapped the verifier's fact list -- diagnostic unavailable")
 
     # ---- verdict-band shift ----------------------------------------------
-    print("\n--- Verdict-band shift vs base (config bands: reliable <= "
-          f"{cfg['alarm']['reliable_max']} | review | unreliable >= {cfg['alarm']['unreliable_min']}) ---")
+    print(
+        "\n--- Verdict-band shift vs base (config bands: reliable <= "
+        f"{cfg['reliability']['reliable_max']} | review | unreliable >= {cfg['reliability']['unreliable_min']}) ---"
+    )
     rank = {b: i for i, b in enumerate(BANDS)}
     base_band = df[df.condition == "base"].set_index("consultation")["verdict_band"]
     for cond in [f"+{k}H" for k in sp["halluc_doses"]] + [omit_cond]:
         cb = df[df.condition == cond].set_index("consultation")["verdict_band"]
         j = pd.DataFrame({"base": base_band, "cond": cb}).dropna()
         d = j["cond"].map(rank) - j["base"].map(rank)
-        print(f"  {cond:<5} worse {int((d > 0).sum()):>3} | same {int((d == 0).sum()):>3} "
-              f"| better {int((d < 0).sum()):>3}   "
-              f"({' , '.join(f'{b}:{int((cb == b).sum())}' for b in BANDS)})")
+        print(
+            f"  {cond:<5} worse {int((d > 0).sum()):>3} | same {int((d == 0).sum()):>3} "
+            f"| better {int((d < 0).sum()):>3}   "
+            f"({' , '.join(f'{b}:{int((cb == b).sum())}' for b in BANDS)})"
+        )
     print(f"  base  ({' , '.join(f'{b}:{int((base_band == b).sum())}' for b in BANDS)})")
 
     # ---- false-positive floor --------------------------------------------
     print("\n--- False-positive floor: combined count on the UNTOUCHED base notes ---")
     c = df[df.condition == "base"]["combined"]
-    print(f"  min {c.min()} | q1 {c.quantile(.25):.1f} | median {c.median():.1f} | "
-          f"q3 {c.quantile(.75):.1f} | max {c.max()} | mean {c.mean():.2f}")
-    print("  This is the floor any dose effect has to clear: the alarm already raises")
+    print(
+        f"  min {c.min()} | q1 {c.quantile(.25):.1f} | median {c.median():.1f} | "
+        f"q3 {c.quantile(.75):.1f} | max {c.max()} | mean {c.mean():.2f}"
+    )
+    print("  This is the floor any dose effect has to clear: the reliability already raises")
     print("  this many flags on notes we planted nothing in. The bands stay PriMock-locked")
-    print("  (config alarm.*, DEV-calibrated); they are NOT recalibrated to this dataset,")
+    print("  (config reliability.*, DEV-calibrated); they are NOT recalibrated to this dataset,")
     print("  so a low floor simply means band crossings are rare here — reported, not tuned.")
 
     # ---- injection bookkeeping -------------------------------------------
     sk = logs[logs.condition.str.endswith("H")]
     if len(sk):
         n_skip = sk.drop_duplicates("consultation").skipped_keywords.map(len)
-        print(f"\n--- Catalogue filter: mean {n_skip.mean():.1f} of "
-              f"{len(load_catalogue(cfg))} entries skipped per consultation "
-              "(keyword present in transcript) ---")
+        print(
+            f"\n--- Catalogue filter: mean {n_skip.mean():.1f} of "
+            f"{len(load_catalogue(cfg))} entries skipped per consultation "
+            "(keyword present in transcript) ---"
+        )
         print("  A skip means the keyword occurs in the transcript, so planting that")
         print("  sentence would not be a hallucination. Passing the check proves the")
         print("  planted fact is absent AS STATED; paraphrase collisions are possible")
@@ -291,6 +335,7 @@ def report(df: pd.DataFrame, logs: pd.DataFrame, cfg: dict, seed: int) -> pd.Dat
 
 def make_figure(dose_tbl: pd.DataFrame) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -303,7 +348,9 @@ def make_figure(dose_tbl: pd.DataFrame) -> None:
     ax.set_xticks(x)
     ax.set_xlabel("injected hallucinations per note (dose)")
     ax.set_ylabel("Δ combined flag count vs base (paired)")
-    ax.set_title("Alarm response to planted hallucinations\n(exploratory; self-built dataset)")
+    ax.set_title(
+        "Reliability response to planted hallucinations\n(exploratory; self-built dataset)"
+    )
     ax.legend()
     fig.tight_layout()
     FIG_PNG.parent.mkdir(parents=True, exist_ok=True)
@@ -325,9 +372,11 @@ def main() -> None:
     scripts = load_scripts(cfg)
     if args.limit:
         scripts = scripts[: args.limit]
-    print(f"EXPLORATORY synthetic alarm probe — {len(scripts)} consultation(s), seed {seed}")
-    print(f"  generator {cfg['llm']['model']} / {cfg['generation']['prompt_version']} | "
-          f"verifier {cfg['claim_verifier']['model']} (both LOCKED, reused as-is)")
+    print(f"EXPLORATORY synthetic reliability probe — {len(scripts)} consultation(s), seed {seed}")
+    print(
+        f"  generator {cfg['llm']['model']} / {cfg['generation']['prompt_version']} | "
+        f"verifier {cfg['claim_verifier']['model']} (both LOCKED, reused as-is)"
+    )
 
     generator, verifier = NoteGenerator(cfg), ClaimVerifier(cfg)
     cache = _load_cache()
@@ -347,8 +396,9 @@ def main() -> None:
             entry["facts"] = verifier.decompose_transcript(transcript)
             _save_cache(cache)
 
-        notes, logs = build_conditions(cid, entry["note"], transcript, cfg, seed,
-                                       catalogue, entry["facts"])
+        notes, logs = build_conditions(
+            cid, entry["note"], transcript, cfg, seed, catalogue, entry["facts"]
+        )
         for log, cond in zip(logs, [k for k in notes if k != "base"]):
             log["note"] = notes[cond]
         all_logs.extend(logs)
@@ -356,10 +406,15 @@ def main() -> None:
         for cond, note in notes.items():
             if (cid, cond) in scored:
                 continue
-            print(f"[{n}/{len(scripts)}] {cid}/{cond}: scoring with the locked alarm ...")
-            rows.append({"consultation": cid, "condition": cond,
-                         "dose": _dose_of(cond),
-                         **score_note(verifier, transcript, note, entry["facts"], cfg)})
+            print(f"[{n}/{len(scripts)}] {cid}/{cond}: scoring with the locked reliability ...")
+            rows.append(
+                {
+                    "consultation": cid,
+                    "condition": cond,
+                    "dose": _dose_of(cond),
+                    **score_note(verifier, transcript, note, entry["facts"], cfg),
+                }
+            )
             df = pd.DataFrame(rows)
             SCORES_CSV.parent.mkdir(parents=True, exist_ok=True)
             df.to_csv(SCORES_CSV, index=False)

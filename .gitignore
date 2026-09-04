@@ -38,7 +38,7 @@ models/
 # MTS-Dialog CSVs + formatted JSONL (re-fetchable + regenerable)
 data/mts_dialog/
 
-# --- Synthetic alarm probe (exploratory, self-built dataset) ---
+# --- Synthetic reliability probe (exploratory, self-built dataset) ---
 # The 43 consultation scripts, copied verbatim from Created_dataset/Keys/.
 # Same policy as primock57/* and data/mts_dialog/: repos hold code, not data.
 data/synthetic/

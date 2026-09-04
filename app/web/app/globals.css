@@ -3,7 +3,7 @@
 /* ==========================================================================
    Clarion design tokens — dark editorial.
    Depth comes from value and 1px hairlines. No glow, no gradient on UI,
-   no drop shadows. Colour appears ONLY in the alarm.
+   no drop shadows. Colour appears ONLY in the reliability flag.
    ========================================================================== */
 
 @theme {
@@ -27,7 +27,7 @@
   --color-hairline: rgba(255, 255, 255, 0.08);
   --color-border-strong: rgba(255, 255, 255, 0.28);
 
-  /* --- SIGNAL: the only colour in the product, reserved for the alarm --- */
+  /* --- SIGNAL: the only colour in the product, reserved for the reliability flag --- */
   --color-sig-red: #e0574f;
   --color-sig-amber: #d9a441;
   --color-sig-green: #6fb98a;

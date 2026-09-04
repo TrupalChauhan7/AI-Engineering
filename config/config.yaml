@@ -60,9 +60,9 @@ judge:                       # FROZEN final judge — config 3/3 of the ≤3 all
   rubric_scale: 5            # Selene 1–5 score -> faithfulness (N-1)/4 ; fits the 8B HW ceiling
   reasoning: false           # Selene reasons in TEXT (its trained format), not Ollama think-mode
 
-alarm:                    # THE STAR
+reliability:                    # THE STAR
   # Verdict bands on the claim verifier's COMBINED error count
-  # (n_unsupported + n_omitted; HIGHER = worse). Used by s2n.alarm.flagger and
+  # (n_unsupported + n_omitted; HIGHER = worse). Used by s2n.reliability.flagger and
   # the demo service. Replaces the old placeholder `faithfulness_threshold: 0.7`,
   # which was a 0–1 fraction and therefore incommensurable with a count.
   #
@@ -78,7 +78,7 @@ alarm:                    # THE STAR
   # NOT a validated clinical operating point. On held-out TEST the verifier's
   # correlation with human error counts reached only 0.48x the human ceiling
   # (rho 0.260 vs ceiling 0.541), and no metric separated distinguishably from
-  # another. These are DEMO bands for the A3 prototype — they show the alarm's
+  # another. These are DEMO bands for the A3 prototype — they show the reliability's
   # mechanism, they do not certify a note as safe.
   reliable_max: 7
   unreliable_min: 12
@@ -91,7 +91,7 @@ demo:
   # The live-upload path in the Clarion app swaps ONLY the ASR model, because
   # large-v3-turbo on CPU takes minutes per consultation and a viva demo that
   # looks frozen is a failed demo. `base` transcribes a short clip in seconds at
-  # a WER good enough to show the alarm working.
+  # a WER good enough to show the reliability working.
   #
   # Cached samples (scripts/build_samples.py) still use the research model — the
   # numbers on screen for a sample are the real pipeline's.
@@ -122,12 +122,12 @@ llm:                      # backend-agnostic; the rest of the code never names a
 synthetic_probe:
   # EXPLORATORY external-validity extension (self-built 43-consultation dataset).
   # NOT part of the pre-registered RQ1/RQ2 and NOT a TEST endpoint. It reuses the
-  # LOCKED generator / claim_verifier / alarm blocks above exactly as they stand;
+  # LOCKED generator / claim_verifier / reliability blocks above exactly as they stand;
   # nothing in this block can change an RQ1 or RQ2 number.
   #
-  # WHY it exists: RQ1 validated the alarm against NOISY human labels (rho ~0.26).
+  # WHY it exists: RQ1 validated the reliability against NOISY human labels (rho ~0.26).
   # Here we author the errors, so the label is EXACT and we can ask whether the
-  # alarm RESPONDS to a known, dosed perturbation -- including the omission axis,
+  # reliability RESPONDS to a known, dosed perturbation -- including the omission axis,
   # its known blind spot.
   keys_dir: data/synthetic/keys          # 43 scripts, copied verbatim; gitignored
   seed: 42                               # per-consultation streams derive from this

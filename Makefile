@@ -10,7 +10,7 @@ transcribe:   ## RQ2: run Whisper over the audio
 generate:     ## generate SOAP notes from transcripts
 	python pipelines/02_generate_notes.py
 
-evaluate:     ## score notes + run the reliability alarm
+evaluate:     ## score notes + run the reliability flag
 	python pipelines/03_evaluate.py
 
 test:         ## run unit tests

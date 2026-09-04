@@ -1,36 +1,58 @@
-# Pinned after first successful setup with:  pip freeze > requirements.txt
-# For now these are the packages; freeze exact versions once installed.
+# =============================================================================
+#  Speech-to-Clinical-Note — Python dependencies
+# =============================================================================
+#  This file lists the PYTHON libraries only. It does NOT install the three
+#  other things the project needs, because they are not Python packages:
+#
+#     1. ffmpeg           (lets Whisper read audio)
+#     2. Ollama + models  (medgemma:4b, llama3.1:8b, atla/selene-mini)
+#     3. Node.js 20+      (only for the demo's web front-end)
+#
+#  The easy path installs ALL of the above for you:
+#     Windows  ->  double-click  SETUP_WINDOWS.bat
+#     Mac      ->  double-click  setup_mac.command
+#  See README.md ("Quick start") for the one-double-click setup.
+#
+#  To install just these Python libraries by hand:
+#     python -m venv .venv                 # make an isolated environment
+#     source .venv/bin/activate            # (Windows: .venv\Scripts\activate)
+#     pip install -r requirements.txt
+#     pip install -e .                     # makes `import s2n` work everywhere
+#
+#  Version floors (>=) are set to the minimum known-good release so a fresh
+#  install on a clean machine behaves the same as ours. Tested on Python 3.10–3.13.
+# =============================================================================
 
-# Transcription (RQ2) — free, runs locally on your Mac
-# NOTE: large-v3-turbo needs a recent build, so we require a minimum version.
+# --- Transcription (RQ2) — free, runs locally -------------------------------
+# large-v3-turbo needs a recent build, hence the minimum version.
 openai-whisper>=20240930
 
-# Evaluation baselines (all free, open-source)
-rouge-score
-bert-score
-python-Levenshtein
+# --- Evaluation baselines (all free, open-source) ---------------------------
+rouge-score>=0.1.2
+bert-score>=0.3.13
+python-Levenshtein>=0.25.0
 
-# Stats + plots for the evaluation/correlation work (RQ1) & figures
-scipy
-matplotlib
-scikit-learn   # PR-AUC / human-ceiling flagging metrics (imports as sklearn)
+# --- Stats + plots for the correlation work (RQ1) & figures -----------------
+scipy>=1.11
+matplotlib>=3.8
+scikit-learn>=1.3          # PR-AUC / human-ceiling flagging metrics (imports as sklearn)
 
-# Data handling + TextGrid parsing + utilities
-pandas
-numpy
-tqdm
-praatio
-pyyaml
-python-dotenv
+# --- Data handling + TextGrid parsing + utilities ---------------------------
+pandas>=2.0
+numpy>=1.24
+tqdm>=4.66
+praatio>=6.0               # reads PriMock57 .TextGrid human transcripts
+pyyaml>=6.0                # reads config/config.yaml
+python-dotenv>=1.0         # reads the .env backend settings
 
-# Testing
-pytest
+# --- Testing ----------------------------------------------------------------
+pytest>=8.0
 
-# LLM client — the code talks to the local Ollama HTTP API
-requests
+# --- LLM client — the code talks to the local Ollama HTTP API ---------------
+requests>=2.31
 
-# Demo API (app/api) — wraps s2n.service for the Clarion frontend.
+# --- Demo API (app/api) — wraps s2n.service for the Clarion front-end --------
 # SSE is done with a plain StreamingResponse, so no sse-starlette needed.
-fastapi
-uvicorn[standard]
-python-multipart
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9    # lets the API receive uploaded audio files

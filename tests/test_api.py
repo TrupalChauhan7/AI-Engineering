@@ -33,7 +33,7 @@ def _write_sample(dir_, sid="day1_consultation02", **over):
         "durationLabel": "7:12",
         "transcript": "Doctor: what brings you in?",
         "note": NOTE,
-        "alarm": {
+        "reliability": {
             "unsupported_claims": ["Patient denies blood in stool"],
             "omitted_facts": ["Patient is taking ibuprofen"],
             "n_unsupported": 1,
@@ -42,7 +42,7 @@ def _write_sample(dir_, sid="day1_consultation02", **over):
             "verdict": "reliable",
             "score_note": "…",
         },
-        "timings": {"transcribe_s": 1.0, "generate_s": 2.0, "alarm_s": 3.0},
+        "timings": {"transcribe_s": 1.0, "generate_s": 2.0, "reliability_s": 3.0},
         **over,
     }
     (dir_ / f"{sid}.json").write_text(json.dumps(data))
@@ -63,7 +63,7 @@ def test_samples_lists_and_replays(client, tmp_path):
         {"id": "day1_consultation02", "label": "Day 1 · Consultation 02", "durationLabel": "7:12"}
     ]
     full = client.get("/api/samples/day1_consultation02").json()
-    assert full["alarm"]["verdict"] == "reliable"
+    assert full["reliability"]["verdict"] == "reliable"
     assert full["note"] == NOTE
 
 
@@ -86,11 +86,11 @@ def _fake_staged(**_kw):
     yield {"stage": "transcribe", "status": "done", "transcript": "Doctor: hello"}
     yield {"stage": "generate", "status": "running"}
     yield {"stage": "generate", "status": "done", "note": NOTE}
-    yield {"stage": "alarm", "status": "running"}
+    yield {"stage": "reliability", "status": "running"}
     yield {
-        "stage": "alarm",
+        "stage": "reliability",
         "status": "done",
-        "alarm": {
+        "reliability": {
             "unsupported_claims": ["No blood in the stool was reported"],
             "omitted_facts": ["ibuprofen"],
             "n_unsupported": 1,
@@ -100,7 +100,7 @@ def _fake_staged(**_kw):
             "score_note": "…",
         },
     }
-    yield {"stage": "done", "timings": {"transcribe_s": 1, "generate_s": 2, "alarm_s": 3}}
+    yield {"stage": "done", "timings": {"transcribe_s": 1, "generate_s": 2, "reliability_s": 3}}
 
 
 def _parse_sse(text):
@@ -125,18 +125,20 @@ def test_analyze_streams_every_stage_in_order(client, monkeypatch):
         "transcribe",
         "generate",
         "generate",
-        "alarm",
-        "alarm",
+        "reliability",
+        "reliability",
     ]
     _, done = events[-1]
-    assert set(done["timings"]) == {"transcribe_s", "generate_s", "alarm_s"}
+    assert set(done["timings"]) == {"transcribe_s", "generate_s", "reliability_s"}
 
 
 def test_analyze_attaches_spans_for_the_scan_animation(client, monkeypatch):
     monkeypatch.setattr(api, "run_pipeline_staged", _fake_staged)
     r = client.post("/api/analyze", files={"audio": ("c.wav", b"RIFFfake", "audio/wav")})
-    alarm_done = [d for e, d in _parse_sse(r.text) if d.get("stage") == "alarm" and "alarm" in d][0]
-    span = alarm_done["spans"][0]
+    reliability_done = [
+        d for e, d in _parse_sse(r.text) if d.get("stage") == "reliability" and "reliability" in d
+    ][0]
+    span = reliability_done["spans"][0]
     # sentence granularity: the flag lands on "No blood.", not the whole S line
     assert span["line"] == 1
     assert NOTE[span["start"] : span["end"]] == "No blood."
@@ -292,7 +294,7 @@ def test_warm_pool_passes_its_components_into_the_pipeline(tmp_path, monkeypatch
 
     def capture(**kw):
         seen.update(kw)
-        yield {"stage": "done", "timings": {"transcribe_s": 0, "generate_s": 0, "alarm_s": 0}}
+        yield {"stage": "done", "timings": {"transcribe_s": 0, "generate_s": 0, "reliability_s": 0}}
 
     monkeypatch.setattr(api, "run_pipeline_staged", capture)
     audio = tmp_path / "d" / "a.wav"

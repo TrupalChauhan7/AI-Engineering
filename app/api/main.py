@@ -190,8 +190,8 @@ def _analyze_stream(audio_path: Path, cfg: dict, components: dict, timeout_s: fl
             if frame.get("stage") == "generate" and frame.get("status") == "done":
                 note = frame["note"]
             # give the UI the spans it needs to underline flagged text
-            if "alarm" in frame:
-                frame["spans"] = locate_claims(note, frame["alarm"]["unsupported_claims"])
+            if "reliability" in frame:
+                frame["spans"] = locate_claims(note, frame["reliability"]["unsupported_claims"])
             yield _sse("stage", frame)
     finally:
         stop.set()  # cancel / disconnect: stop at the next stage boundary
@@ -245,7 +245,7 @@ async def analyze(audio: UploadFile) -> StreamingResponse:
 
 @app.get("/api/health")
 def health() -> dict:
-    bands = load_config()["alarm"]
+    bands = load_config()["reliability"]
     return {
         "ok": True,
         "samples": len(_sample_files()),
@@ -253,7 +253,7 @@ def health() -> dict:
         "demo_asr": POOL.asr_model if POOL else None,
         # the UI scales the verdict ring against these — read from config so the
         # ring cannot drift out of step with the thresholds it depicts
-        "alarm": {
+        "reliability": {
             "reliable_max": int(bands["reliable_max"]),
             "unreliable_min": int(bands["unreliable_min"]),
         },

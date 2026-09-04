@@ -8,5 +8,5 @@ from s2n.config import load_config
 
 def test_config_loads():
     cfg = load_config()
-    assert "alarm" in cfg
-    assert 0 <= cfg["alarm"]["reliable_max"] < cfg["alarm"]["unreliable_min"]
+    assert "reliability" in cfg
+    assert 0 <= cfg["reliability"]["reliable_max"] < cfg["reliability"]["unreliable_min"]

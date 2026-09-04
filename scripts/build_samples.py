@@ -82,17 +82,17 @@ def main() -> None:
         # Spans let the UI underline flagged text during the verification sweep.
         # The live SSE route computes these too — cache them so the sample path
         # replays the identical animation. Pure post-processing: no score changes.
-        result["spans"] = locate_claims(result["note"], result["alarm"]["unsupported_claims"])
+        result["spans"] = locate_claims(result["note"], result["reliability"]["unsupported_claims"])
         result["id"] = cid
         result["label"] = _pretty_label(cid)
         result["durationLabel"] = _duration_label(audio)
         dest.write_text(json.dumps(result, indent=1))
 
-        alarm = result["alarm"]
+        reliability = result["reliability"]
         print(
             f"           done in {time.perf_counter() - t0:.0f}s — "
-            f"{alarm['verdict'].upper()}: {alarm['n_unsupported']} unsupported, "
-            f"{alarm['n_omitted']} omitted (combined {alarm['combined']})"
+            f"{reliability['verdict'].upper()}: {reliability['n_unsupported']} unsupported, "
+            f"{reliability['n_omitted']} omitted (combined {reliability['combined']})"
         )
 
     n = len(list(OUT_DIR.glob("*.json")))

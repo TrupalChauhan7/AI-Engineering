@@ -182,7 +182,7 @@ def report_flagging(df: pd.DataFrame, seed: int) -> None:
     print(f"  positive base rate = {base:.3f} (n_pos={int(df.is_critical.sum())}/{len(df)})")
     if base > 0.9 or base < 0.1:
         print(
-            "  ⚠ DEGENERATE base rate — 'the alarm' PR-AUC is near-trivial on this split; "
+            "  ⚠ DEGENERATE base rate — 'the reliability' PR-AUC is near-trivial on this split; "
             "flag for review (most machine notes have ≥1 critical error)."
         )
     for col in METRIC_COLS:
@@ -223,17 +223,17 @@ def report_flagging_exploratory(df: pd.DataFrame, cfg: dict, seed: int) -> None:
         )
 
 
-def report_alarm_threshold(df: pd.DataFrame, cfg: dict) -> None:
+def report_reliability_threshold(df: pd.DataFrame, cfg: dict) -> None:
     """DEV-only: describe the combined distribution + a recommended threshold."""
     c = df["claims_combined"]
-    print("\n--- Alarm threshold selection (DEV only) ---")
+    print("\n--- Reliability threshold selection (DEV only) ---")
     print(
         f"  combined error count: min {c.min()}, q1 {c.quantile(.25):.0f}, "
         f"median {c.median():.0f}, q3 {c.quantile(.75):.0f}, max {c.max()}"
     )
     rec = int(round(c.median()))
-    lo, hi = cfg["alarm"]["reliable_max"], cfg["alarm"]["unreliable_min"]
-    print(f"  config alarm bands: reliable <= {lo} | review | unreliable >= {hi}")
+    lo, hi = cfg["reliability"]["reliable_max"], cfg["reliability"]["unreliable_min"]
+    print(f"  config reliability bands: reliable <= {lo} | review | unreliable >= {hi}")
     print(f"  RECOMMENDED (DEV median combined) = {rec}  → set in config before the TEST run")
 
 
@@ -278,7 +278,7 @@ def main() -> None:
     report_flagging_exploratory(machine, cfg, seed)
     report(df, "ALL NOTES (machine + doctor — SENSITIVITY)", seed)
     if args.split == "dev":
-        report_alarm_threshold(machine, cfg)
+        report_reliability_threshold(machine, cfg)
 
     tbl.to_csv(corr_csv, index=False)
     print(f"\nSaved correlation table -> {corr_csv.relative_to(ROOT)}")

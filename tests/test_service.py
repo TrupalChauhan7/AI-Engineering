@@ -10,11 +10,11 @@ import sys
 
 import pytest
 
-from s2n.alarm.flagger import verdict
 from s2n.evaluation.claim_verifier import ClaimReport, OmissionReport
+from s2n.reliability.flagger import verdict
 from s2n.service import run_pipeline
 
-CFG = {"alarm": {"reliable_max": 7, "unreliable_min": 12}}
+CFG = {"reliability": {"reliable_max": 7, "unreliable_min": 12}}
 
 
 class FakeTranscriber:
@@ -66,8 +66,8 @@ def _run(**kw):
 
 def test_returns_the_documented_shape():
     out = _run()
-    assert set(out) == {"transcript", "note", "alarm", "timings"}
-    assert set(out["alarm"]) == {
+    assert set(out) == {"transcript", "note", "reliability", "timings"}
+    assert set(out["reliability"]) == {
         "unsupported_claims",
         "omitted_facts",
         "n_unsupported",
@@ -76,7 +76,7 @@ def test_returns_the_documented_shape():
         "verdict",
         "score_note",
     }
-    assert set(out["timings"]) == {"transcribe_s", "generate_s", "alarm_s"}
+    assert set(out["timings"]) == {"transcribe_s", "generate_s", "reliability_s"}
 
 
 def test_result_is_json_serialisable():
@@ -99,13 +99,13 @@ def test_requires_audio_or_transcript():
 
 
 def test_reports_the_offending_claims_and_facts():
-    """The alarm must be explainable — the 'why', not just a number."""
+    """The reliability must be explainable — the 'why', not just a number."""
     out = _run(
         verifier=FakeVerifier(
             verdicts=("supported", "contradicted", "not_mentioned"),
             omissions=("present", "absent", "absent"),
         )
-    )["alarm"]
+    )["reliability"]
     assert out["unsupported_claims"] == ["claim 1", "claim 2"]  # non-"supported"
     assert out["omitted_facts"] == ["fact 1", "fact 2"]  # "absent"
     assert out["n_unsupported"] == 2 and out["n_omitted"] == 2
@@ -125,9 +125,9 @@ def test_verdict_bands_on_synthetic_counts(combined, expected):
 
 def test_verdict_flows_through_the_pipeline():
     out = _run(verifier=FakeVerifier(verdicts=("contradicted",) * 12, omissions=()))
-    assert out["alarm"]["combined"] == 12
-    assert out["alarm"]["verdict"] == "unreliable"
-    assert "UNRELIABLE" in out["alarm"]["score_note"]
+    assert out["reliability"]["combined"] == 12
+    assert out["reliability"]["verdict"] == "unreliable"
+    assert "UNRELIABLE" in out["reliability"]["score_note"]
 
 
 # --- leak safety (project rule 1) -------------------------------------
@@ -137,7 +137,7 @@ def test_service_path_never_loads_the_answer_key():
     """Importing the service must not pull in any gold-note / human-eval loader.
 
     Run in a clean interpreter so an unrelated test's imports cannot mask a real
-    leak. The alarm's credibility rests on the generator+verifier path having no
+    leak. The reliability's credibility rests on the generator+verifier path having no
     route to primock57/notes/ or primock57/human_eval_data/.
     """
     probe = (

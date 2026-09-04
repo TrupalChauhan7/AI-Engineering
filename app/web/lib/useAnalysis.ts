@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { Alarm, AnalysisResult, SampleMeta, Span, Stage, Timings } from "./types";
+import type { Reliability, AnalysisResult, SampleMeta, Span, Stage, Timings } from "./types";
 
 /**
  * ONE analysis controller, two event sources.
@@ -16,7 +16,7 @@ export interface AnalysisState {
   stage: Stage;
   transcript: string;
   note: string;
-  alarm: Alarm | null;
+  reliability: Reliability | null;
   spans: Span[];
   timings: Timings | null;
   error: string | null;
@@ -33,7 +33,7 @@ const EMPTY: AnalysisState = {
   stage: "idle",
   transcript: "",
   note: "",
-  alarm: null,
+  reliability: null,
   spans: [],
   timings: null,
   error: null,
@@ -44,7 +44,7 @@ const EMPTY: AnalysisState = {
 };
 
 /** Scripted replay cadence (ms) — long enough to read, short enough to hold. */
-const BEAT = { transcribe: 1100, generate: 1000, alarm: 1500 };
+const BEAT = { transcribe: 1100, generate: 1000, reliability: 1500 };
 
 const prefersReduced = () =>
   typeof window !== "undefined" &&
@@ -97,12 +97,12 @@ export function useAnalysis() {
 
     setState((s) => ({
       ...s,
-      stage: "alarm",
-      alarm: data.alarm,
+      stage: "reliability",
+      reliability: data.reliability,
       spans: data.spans ?? [],
       stageStartedAt: Date.now(),
     }));
-    await wait(beat(BEAT.alarm));
+    await wait(beat(BEAT.reliability));
     if (!alive()) return;
 
     setState((s) => ({ ...s, stage: "done", timings: data.timings, stageStartedAt: null }));
@@ -232,7 +232,7 @@ function applyEvent(
     stage,
     transcript: (p.transcript as string) ?? s.transcript,
     note: (p.note as string) ?? s.note,
-    alarm: (p.alarm as Alarm) ?? s.alarm,
+    reliability: (p.reliability as Reliability) ?? s.reliability,
     spans: (p.spans as Span[]) ?? s.spans,
   }));
 }

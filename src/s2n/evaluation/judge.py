@@ -1,7 +1,7 @@
 """Tier-3: LLM-as-a-judge faithfulness score (the project's main method).
 
 WHY: the judge reads the TRANSCRIPT + the generated NOTE and rates how faithful
-the note is. This is the "alarm" whose value we test against the cheaper
+the note is. This is the "reliability" whose value we test against the cheaper
 baselines (pre-registration §B1 tier 3). It must be a DIFFERENT model family
 from the generator (gemma) to avoid self-enhancement bias (project rule 6).
 

@@ -3,7 +3,7 @@
 import { animate, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { EASE, fadeUp, stagger } from "@/lib/motion";
-import { VERDICT_COLOR, VERDICT_WORD, type Alarm, type Stage } from "@/lib/types";
+import { VERDICT_COLOR, VERDICT_WORD, type Reliability, type Stage } from "@/lib/types";
 
 /** Counts tick up rather than snapping — the numbers should feel *counted*. */
 function Count({ to, delay = 0 }: { to: number; delay?: number }) {
@@ -24,7 +24,7 @@ function Count({ to, delay = 0 }: { to: number; delay?: number }) {
 }
 
 /**
- * The ring draws itself, and its fill encodes RELIABILITY — not error count.
+ * The ring draws itself, and its fill encodes the reliability verdict — not error count.
  *
  * Filling by error count made a clean note show a nearly empty ring, which
  * reads as "40% reliable" and undersells the result. Inverted: a note with few
@@ -32,16 +32,16 @@ function Count({ to, delay = 0 }: { to: number; delay?: number }) {
  * "fuller and greener = more trustworthy" holds at a glance, which is the only
  * thing a viewer reads in the first second.
  */
-function VerdictRing({ alarm, show, unreliableMin = 12 }: {
-  alarm: Alarm;
+function VerdictRing({ reliability, show, unreliableMin = 12 }: {
+  reliability: Reliability;
   show: boolean;
   unreliableMin?: number;
 }) {
   const reduced = useReducedMotion();
   const R = 54;
   const C = 2 * Math.PI * R;
-  const frac = Math.min(1, Math.max(0.05, 1 - alarm.combined / unreliableMin));
-  const color = VERDICT_COLOR[alarm.verdict];
+  const frac = Math.min(1, Math.max(0.05, 1 - reliability.combined / unreliableMin));
+  const color = VERDICT_COLOR[reliability.verdict];
 
   return (
     <svg viewBox="0 0 128 128" className="h-32 w-32" aria-hidden>
@@ -64,20 +64,20 @@ function VerdictRing({ alarm, show, unreliableMin = 12 }: {
   );
 }
 
-export default function AlarmPanel({
-  alarm,
+export default function ReliabilityPanel({
+  reliability,
   stage,
   linkedFlag,
   onHoverFlag,
   unreliableMin = 12,
 }: {
-  alarm: Alarm | null;
+  reliability: Reliability | null;
   stage: Stage;
   unreliableMin?: number;
   linkedFlag: number | null;
   onHoverFlag: (i: number | null) => void;
 }) {
-  const show = Boolean(alarm) && (stage === "alarm" || stage === "done");
+  const show = Boolean(reliability) && (stage === "reliability" || stage === "done");
   const railRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -87,7 +87,7 @@ export default function AlarmPanel({
         <span className="t-label text-[var(--color-ink-faint)]">Claim verifier</span>
       </header>
 
-      {!alarm ? (
+      {!reliability ? (
         <p className="t-note mt-5 text-[var(--color-ink-faint)]">
           {stage === "generate" ? "Note drafted — verifying next…" : "Awaiting note…"}
         </p>
@@ -102,27 +102,27 @@ export default function AlarmPanel({
         >
           {/* verdict */}
           <div className="flex items-center gap-6">
-            <VerdictRing alarm={alarm} show={show} unreliableMin={unreliableMin} />
+            <VerdictRing reliability={reliability} show={show} unreliableMin={unreliableMin} />
             <div>
               <motion.p
                 variants={fadeUp}
                 className="t-verdict"
-                style={{ color: VERDICT_COLOR[alarm.verdict] }}
+                style={{ color: VERDICT_COLOR[reliability.verdict] }}
               >
-                {VERDICT_WORD[alarm.verdict]}
+                {VERDICT_WORD[reliability.verdict]}
               </motion.p>
               {/* The COMBINED total leads: it is the one signal the research
                   validated. The breakdown stays underneath as its provenance. */}
               <motion.p
                 variants={fadeUp}
                 className="t-label mt-3"
-                style={{ color: VERDICT_COLOR[alarm.verdict] }}
+                style={{ color: VERDICT_COLOR[reliability.verdict] }}
               >
-                <Count to={alarm.combined} delay={0.25} /> combined flags
+                <Count to={reliability.combined} delay={0.25} /> combined flags
               </motion.p>
               <motion.p variants={fadeUp} className="t-label mt-2 text-[var(--color-ink-mute)]">
-                <Count to={alarm.n_unsupported} delay={0.3} /> unsupported ·{" "}
-                <Count to={alarm.n_omitted} delay={0.4} /> omitted
+                <Count to={reliability.n_unsupported} delay={0.3} /> unsupported ·{" "}
+                <Count to={reliability.n_omitted} delay={0.4} /> omitted
               </motion.p>
             </div>
           </div>
@@ -133,12 +133,12 @@ export default function AlarmPanel({
               Claims to verify against the transcript
             </p>
             <ul className="space-y-0">
-              {alarm.unsupported_claims.length === 0 && (
+              {reliability.unsupported_claims.length === 0 && (
                 <li className="t-note text-[var(--color-ink-faint)]">
                   None — every claim traced to the transcript.
                 </li>
               )}
-              {alarm.unsupported_claims.map((c, i) => (
+              {reliability.unsupported_claims.map((c, i) => (
                 <motion.li
                   key={i}
                   variants={fadeUp}
@@ -166,10 +166,10 @@ export default function AlarmPanel({
               Details possibly said, not in the note
             </p>
             <ul className="space-y-0">
-              {alarm.omitted_facts.length === 0 && (
+              {reliability.omitted_facts.length === 0 && (
                 <li className="t-note text-[var(--color-ink-faint)]">None — nothing dropped.</li>
               )}
-              {alarm.omitted_facts.map((f, i) => (
+              {reliability.omitted_facts.map((f, i) => (
                 <motion.li
                   key={i}
                   variants={fadeUp}
