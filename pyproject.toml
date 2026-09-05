@@ -24,3 +24,6 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]   # pycodestyle errors, pyflakes, import sorting
+
+[tool.ruff.lint.per-file-ignores]
+"meetings_smoke_test.py" = ["E501"]  # verbatim sample transcript lines

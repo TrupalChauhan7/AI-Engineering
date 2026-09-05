@@ -66,3 +66,6 @@ graphify-out/
 
 # --- One-shot TEST stdout (transcript-derived text; same policy as results/) ---
 results_test_stdout.log
+
+# TofuEval + MeetingBank derived data (third-party; eval only, not redistributed)
+data/tofueval/
