@@ -45,6 +45,8 @@ def _apply_domain(cfg: dict) -> dict:
         cfg["claim_verifier"]["verify_prompt"] = profile["verify_prompt"]
     if "omission_verify_prompt" in profile:
         cfg["claim_verifier"]["omission_verify_prompt"] = profile["omission_verify_prompt"]
+    if "transcript_facts_prompt" in profile:
+        cfg["claim_verifier"]["transcript_facts_prompt"] = profile["transcript_facts_prompt"]
     if "reliable_max" in profile:
         cfg["reliability"]["reliable_max"] = profile["reliable_max"]
     if "unreliable_min" in profile:
