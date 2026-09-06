@@ -139,3 +139,22 @@ synthetic_probe:
   # stricter proof the deleted fact was genuinely in the transcript.
   omission_match_threshold: 0.45
   n_boot: 5000                           # matches the RQ1 cluster-bootstrap convention
+
+# --- Domain profiles (Phase 2) -----------------------------------------------
+# The pipeline is domain-general. `domain` selects the active profile, which
+# overrides the generator model + generation prompt and the verifier's prompts.
+# The verifier MODEL stays llama3.1:8b for all domains (different family from
+# both medgemma and qwen3 -> rule 6 holds). Override for one run with the
+# S2N_DOMAIN env var. domain=clinical reproduces the academic setup exactly.
+domain: clinical
+domains:
+  clinical:                       # the academic setup (behaviour-preserving default)
+    generator_model: medgemma:4b
+    generation_prompt: v1.0
+    verify_prompt: claim_verify_v1
+    omission_verify_prompt: omission_verify_v1
+  meetings:                       # Phase-2 non-clinical domain (improved prompts)
+    generator_model: qwen3:14b
+    generation_prompt: meetings_v1
+    verify_prompt: claim_verify_v2
+    omission_verify_prompt: omission_verify_v2
