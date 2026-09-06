@@ -158,3 +158,5 @@ domains:
     generation_prompt: meetings_v1
     verify_prompt: claim_verify_v2
     omission_verify_prompt: omission_verify_v2
+    reliable_max: 4                 # data-calibrated on meeting notes (n=19): Q1=4, Q3=9
+    unreliable_min: 9               # (clinical bands 7/12 are looser; meeting notes are more faithful)
