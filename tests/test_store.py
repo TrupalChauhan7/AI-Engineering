@@ -120,8 +120,9 @@ def test_list_limit_and_clamp(store):
     store.record(result=RESULT, cfg=CFG, source="transcript")
     assert store.count() == 2
     assert len(store.list(limit=1)) == 1
-    # a stray value can't ask SQLite for the whole table (negative = unlimited)
-    assert len(store.list(limit=-1)) == 2
+    # a stray value can't dump the whole table: limit is clamped to >= 1
+    assert len(store.list(limit=-1)) == 1
+    assert len(store.list(limit=0)) == 1
 
 
 def test_stats_aggregates_by_verdict(store):
