@@ -25,8 +25,6 @@ export interface AnalysisState {
   sampleId: string | null;
   /** epoch ms the current stage began — drives the live elapsed counter */
   stageStartedAt: number | null;
-  /** true once the server has confirmed the stream is alive */
-  streaming: boolean;
   /** the request's trace id (upload only) — ties the run to the audit trail */
   requestId: string | null;
   /** true once a live run has completed and been written to the audit trail */
@@ -44,7 +42,6 @@ const EMPTY: AnalysisState = {
   live: false,
   sampleId: null,
   stageStartedAt: null,
-  streaming: false,
   requestId: null,
   recorded: false,
 };
@@ -62,12 +59,6 @@ export function useAnalysis() {
   const [state, setState] = useState<AnalysisState>(EMPTY);
   const abortRef = useRef<AbortController | null>(null);
   const runIdRef = useRef(0);
-
-  const reset = useCallback(() => {
-    abortRef.current?.abort();
-    runIdRef.current += 1;
-    setState(EMPTY);
-  }, []);
 
   /** Replay a cached sample with scripted timing (no models run). */
   const runSample = useCallback(async (meta: SampleMeta) => {
@@ -191,13 +182,12 @@ export function useAnalysis() {
       ...s,
       stage: "idle",
       live: false,
-      streaming: false,
       stageStartedAt: null,
       error: null,
     }));
   }, []);
 
-  return { state, runSample, runUpload, reset, cancel };
+  return { state, runSample, runUpload, cancel };
 }
 
 function applyEvent(
@@ -206,8 +196,7 @@ function applyEvent(
   setState: React.Dispatch<React.SetStateAction<AnalysisState>>,
 ) {
   if (event === "heartbeat") {
-    // proof the stream is open while a long stage runs
-    setState((s) => (s.streaming ? s : { ...s, streaming: true }));
+    // liveness only — the UI shows its own elapsed timer; nothing to update
     return;
   }
   if (event === "error") {
@@ -236,7 +225,7 @@ function applyEvent(
   const stage = p.stage as Stage;
   if (p.status === "running") {
     // new stage -> restart the elapsed clock
-    setState((s) => ({ ...s, stage, streaming: true, stageStartedAt: Date.now() }));
+    setState((s) => ({ ...s, stage, stageStartedAt: Date.now() }));
     return;
   }
   setState((s) => ({

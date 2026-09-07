@@ -140,12 +140,14 @@ synthetic_probe:
   omission_match_threshold: 0.45
   n_boot: 5000                           # matches the RQ1 cluster-bootstrap convention
 
-# --- Domain profiles (Phase 2) -----------------------------------------------
-# The pipeline is domain-general. `domain` selects the active profile, which
-# overrides the generator model + generation prompt and the verifier's prompts.
-# The verifier MODEL stays llama3.1:8b for all domains (different family from
-# both medgemma and qwen3 -> rule 6 holds). Override for one run with the
-# S2N_DOMAIN env var. domain=clinical reproduces the academic setup exactly.
+# --- Domain profiles -----------------------------------------------------------
+# EVALUATION ONLY — not a product feature. The PRODUCT is clinical-only and never
+# sets S2N_DOMAIN, so it always resolves the `clinical` profile below (which is
+# behaviour-preserving — the academic setup). The `meetings` profile exists purely
+# so the meetings *generalisation eval* scripts can run the same pipeline in
+# another domain (research evidence that the verifier is not overfit to clinical),
+# selected with the S2N_DOMAIN env var. The verifier MODEL stays llama3.1:8b for
+# both (a different family from the generators -> rule 6 holds).
 domain: clinical
 domains:
   clinical:                       # the academic setup (behaviour-preserving default)

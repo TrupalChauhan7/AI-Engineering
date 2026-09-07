@@ -48,7 +48,6 @@ export interface RunSummary {
   run_id: string;
   request_id: string | null;
   created_at: string;
-  domain: string;
   source: string;
   source_name: string | null;
   generator_model: string;
@@ -87,7 +86,6 @@ export interface StageLatency {
 export interface Metrics {
   total: number;
   by_verdict: Record<string, number>;
-  by_domain: Record<string, number>;
   latency_s: Record<string, StageLatency>;
 }
 

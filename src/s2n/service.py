@@ -76,6 +76,10 @@ def run_pipeline_staged(
 
     Every payload is JSON-serialisable. A caller that wants the whole result in
     one piece should use ``run_pipeline`` instead.
+
+    Raises ``EmptyTranscriptError`` (before the ``generate`` stage) when the
+    transcript has fewer than ``MIN_TRANSCRIPT_WORDS`` words — silence, music, or
+    a wrong file — rather than fabricating a note from nothing.
     """
     if audio_path is None and transcript is None:
         raise ValueError("run_pipeline needs either audio_path or transcript")
@@ -92,8 +96,8 @@ def run_pipeline_staged(
     # --- guard: refuse to fabricate a note from a non-consultation ---------
     if len((transcript or "").split()) < MIN_TRANSCRIPT_WORDS:
         raise EmptyTranscriptError(
-            "No usable speech was detected in the audio. Please upload a clear "
-            "consultation recording."
+            "No usable speech was detected — the recording was empty or too short "
+            "to be a consultation. Please provide a clear consultation recording."
         )
 
     # --- 2. transcript -> SOAP note ---------------------------------------

@@ -3,12 +3,16 @@
 WHY: every module reads settings from ONE place. No hardcoded paths or
 model names anywhere else. Change an experiment by editing config.yaml.
 
-Phase 2 — domains: a ``domain`` selector plus ``domains`` profiles let the SAME
-pipeline run in different domains (clinical / meetings) by overriding the
-generator model and the generator/verifier prompts. ``domain: clinical``
-reproduces the academic setup exactly (behaviour-preserving). The ``S2N_DOMAIN``
-env var overrides the file's ``domain`` for a single run. With no ``domains``
-block the config is returned unchanged (back-compat).
+The PRODUCT is clinical-only. ``load_config()`` resolves the clinical profile,
+which is behaviour-preserving (its overrides equal the base values — the academic
+setup).
+
+EVALUATION ONLY — domains: a ``domain`` selector plus ``domains`` profiles can
+run the SAME pipeline in another domain (a meetings generalisation study) by
+overriding the generator model and prompts, selected with the ``S2N_DOMAIN`` env
+var. This exists for the meetings *eval scripts* (research evidence that the
+verifier generalises); the product never sets ``S2N_DOMAIN`` and exposes no
+domain switch. With no ``domains`` block the config is returned unchanged.
 """
 
 import os

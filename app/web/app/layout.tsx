@@ -28,7 +28,7 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Clarion — reliability for AI clinical notes",
   description:
-    "Turns a consultation recording into a SOAP note, then verifies every claim against the transcript and raises an reliability on the notes that need a second look.",
+    "Turns a consultation recording into a SOAP note, then verifies every claim against the transcript and flags the notes that need a second look.",
 };
 
 export const viewport: Viewport = {

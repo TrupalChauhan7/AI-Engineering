@@ -90,7 +90,11 @@ async def request_id_and_access_log(request: Request, call_next):
     when the run completes (see ``_record_run``). This line still pins the
     request id and final status for that call.
     """
-    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    # Honour an inbound id but sanitise it — a client-supplied header must not
+    # forge log lines or inject arbitrary characters. Keep it short + [A-Za-z0-9-_].
+    raw = request.headers.get("x-request-id", "")
+    clean = "".join(c for c in raw if c.isalnum() or c in "-_")[:64]
+    request_id = clean or uuid.uuid4().hex[:12]
     request.state.request_id = request_id
     t0 = time.perf_counter()
     response = await call_next(request)
@@ -394,11 +398,11 @@ def health() -> dict:
 
 
 @app.get("/api/runs")
-def list_runs(limit: int = 50, domain: str | None = None) -> list[dict]:
-    """Recent runs, newest first (summary fields only). Optionally filter by domain."""
+def list_runs(limit: int = 50) -> list[dict]:
+    """Recent runs, newest first (summary fields only)."""
     if STORE is None:
         raise HTTPException(status_code=503, detail="Audit store is not initialised.")
-    return STORE.list(limit=limit, domain=domain)
+    return STORE.list(limit=limit)
 
 
 @app.get("/api/runs/{run_id}")
@@ -414,7 +418,7 @@ def get_run(run_id: str) -> dict:
 
 @app.get("/api/stats")
 def audit_stats() -> dict:
-    """Aggregate counts across the audit trail — by verdict and by domain."""
+    """Aggregate counts across the audit trail — by verdict."""
     if STORE is None:
         raise HTTPException(status_code=503, detail="Audit store is not initialised.")
     return STORE.stats()
@@ -422,7 +426,7 @@ def audit_stats() -> dict:
 
 @app.get("/api/metrics")
 def metrics() -> dict:
-    """Operational view: run counts (by verdict/domain) plus per-stage latency.
+    """Operational view: run counts (by verdict) plus per-stage latency.
 
     Built entirely from what the audit trail already stores, so it costs nothing
     extra to keep and never drifts from what actually ran.

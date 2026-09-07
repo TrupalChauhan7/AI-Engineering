@@ -1,7 +1,7 @@
 "use client";
 
 import { animate, motion, useReducedMotion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { EASE, fadeUp, stagger } from "@/lib/motion";
 import { VERDICT_COLOR, VERDICT_WORD, type Reliability, type Stage } from "@/lib/types";
 
@@ -78,7 +78,6 @@ export default function ReliabilityPanel({
   onHoverFlag: (i: number | null) => void;
 }) {
   const show = Boolean(reliability) && (stage === "reliability" || stage === "done");
-  const railRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="flex min-h-0 flex-col lg:h-full">
@@ -93,7 +92,6 @@ export default function ReliabilityPanel({
         </p>
       ) : (
         <motion.div
-          ref={railRef}
           initial="hidden"
           animate={show ? "show" : "hidden"}
           variants={stagger(0.08, 0.15)}

@@ -38,7 +38,6 @@ RUN pip install --no-cache-dir -e .
 # Defaults for a container talking to Ollama on the host. Overridable at run
 # time (compose sets the host explicitly for the platform).
 ENV S2N_OLLAMA_HOST=http://host.docker.internal:11434 \
-    WHISPER_CACHE=/root/.cache/whisper \
     PYTHONUNBUFFERED=1
 
 # The audit DB (results/runs.db) and Whisper's downloaded weights are the two

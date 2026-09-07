@@ -2,8 +2,8 @@
 
 Clarion is the productised side of this project: the same reliability pipeline
 (transcribe → note → verify → flag) behind an HTTP API, with an audit trail and
-per-domain routing. This doc is about **running it**; the research is documented
-elsewhere.
+per-stage observability. This doc is about **running it**; the research is
+documented elsewhere.
 
 There are two ways to run it. Both need one thing first.
 

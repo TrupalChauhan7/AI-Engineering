@@ -6,9 +6,9 @@
 #  PREREQUISITE (on the HOST, not in the container): Ollama running with the
 #  models pulled. The container talks to it over HTTP.
 #      ollama serve            # if not already running
-#      ollama pull medgemma:4b && ollama pull qwen3:14b && ollama pull llama3.1:8b
+#      ollama pull medgemma:4b && ollama pull llama3.1:8b
 #
-#  Then: http://localhost:8000/api/health  ·  /api/domains  ·  /api/metrics
+#  Then: http://localhost:8000/api/health  ·  /api/runs  ·  /api/metrics
 # =============================================================================
 
 services:

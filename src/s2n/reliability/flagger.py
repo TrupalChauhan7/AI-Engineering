@@ -68,7 +68,7 @@ def flag(note_eval: dict, cfg: dict | None = None, threshold: float | None = Non
 
     ``note_eval`` carries the claim-verifier counts for the note, i.e. either a
     precomputed ``claims_combined`` or the parts ``n_unsupported`` + ``n_omitted``
-    (and optionally ``n_claims`` / ``n_facts`` for a richer reason string).
+    (which also populate the reason string).
 
     Returns ``{"reliable": bool, "reason": str, "score": float}`` where ``score``
     is the combined error count (higher = less reliable).

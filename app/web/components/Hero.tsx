@@ -49,7 +49,7 @@ export default function Hero({ onStart }: { onStart: () => void }) {
         {/* marginalia + statement */}
         <motion.div style={{ y: drift }} className="mt-16 md:mt-24">
           <motion.p variants={fadeUp} className="t-label mb-8 text-[var(--color-ink-mute)]">
-            001 — The reliability, not the autocomplete
+            001 — The doubt, not the autocomplete
           </motion.p>
 
           <h1 className="t-hero max-w-[16ch] text-[var(--color-ink)]">

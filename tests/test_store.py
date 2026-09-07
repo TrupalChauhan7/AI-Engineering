@@ -115,24 +115,23 @@ def test_list_is_newest_first_and_light(store):
     assert rows[0]["verdict"] == "reliable"
 
 
-def test_list_limit_and_domain_filter(store):
-    _record(store)  # meetings
-    clinical_cfg = {**CFG, "active_domain": "clinical", "domain": "clinical"}
-    store.record(result=RESULT, cfg=clinical_cfg, source="transcript")
+def test_list_limit_and_clamp(store):
+    _record(store)
+    store.record(result=RESULT, cfg=CFG, source="transcript")
     assert store.count() == 2
     assert len(store.list(limit=1)) == 1
-    meetings_only = store.list(domain="meetings")
-    assert len(meetings_only) == 1 and meetings_only[0]["domain"] == "meetings"
+    # a stray value can't ask SQLite for the whole table (negative = unlimited)
+    assert len(store.list(limit=-1)) == 2
 
 
-def test_stats_aggregates_by_verdict_and_domain(store):
-    _record(store)  # reliable / meetings
+def test_stats_aggregates_by_verdict(store):
+    _record(store)  # reliable
     unrel = {**RESULT, "reliability": {**RESULT["reliability"], "verdict": "unreliable"}}
     store.record(result=unrel, cfg=CFG, source="transcript")
     s = store.stats()
     assert s["total"] == 2
     assert s["by_verdict"] == {"reliable": 1, "unreliable": 1}
-    assert s["by_domain"] == {"meetings": 2}
+    assert "by_domain" not in s
 
 
 def test_stored_record_is_json_serialisable(store):

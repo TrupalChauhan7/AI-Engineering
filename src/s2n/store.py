@@ -104,7 +104,6 @@ _SCHEMA = (
     + ",\n  ".join(_column_ddl(c) + (" PRIMARY KEY" if c == "run_id" else "") for c in _COLUMNS)
     + "\n);\n"
     "CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs (created_at);\n"
-    "CREATE INDEX IF NOT EXISTS idx_runs_domain ON runs (domain);\n"
 )
 
 
@@ -191,22 +190,18 @@ class RunStore:
             row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
         return _row_to_dict(row) if row else None
 
-    def list(self, limit: int = 50, domain: str | None = None) -> list[dict]:
+    def list(self, limit: int = 50) -> list[dict]:
         """Recent runs (summary fields only), newest first.
 
         Transcript and note are omitted deliberately — a history list must stay
-        light. Fetch one run's full record with :meth:`get`.
+        light. Fetch one run's full record with :meth:`get`. ``limit`` is clamped
+        to a sane range so a stray value can't ask SQLite for the whole table.
         """
+        limit = max(1, min(int(limit), 500))
         cols = ", ".join(_SUMMARY_COLUMNS)
-        sql = f"SELECT {cols} FROM runs"
-        params: list = []
-        if domain:
-            sql += " WHERE domain = ?"
-            params.append(domain)
-        sql += " ORDER BY created_at DESC LIMIT ?"
-        params.append(limit)
+        sql = f"SELECT {cols} FROM runs ORDER BY created_at DESC LIMIT ?"
         with self._connect() as conn:
-            rows = conn.execute(sql, params).fetchall()
+            rows = conn.execute(sql, (limit,)).fetchall()
         return [dict(r) for r in rows]
 
     def count(self) -> int:
@@ -215,7 +210,7 @@ class RunStore:
             return conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
 
     def stats(self) -> dict:
-        """Aggregate counts by verdict and by domain — a dashboard's raw material."""
+        """Aggregate counts by verdict — a dashboard's raw material."""
         with self._connect() as conn:
             by_verdict = {
                 r["verdict"]: r["n"]
@@ -223,13 +218,7 @@ class RunStore:
                     "SELECT verdict, COUNT(*) AS n FROM runs GROUP BY verdict"
                 ).fetchall()
             }
-            by_domain = {
-                r["domain"]: r["n"]
-                for r in conn.execute(
-                    "SELECT domain, COUNT(*) AS n FROM runs GROUP BY domain"
-                ).fetchall()
-            }
-        return {"total": self.count(), "by_verdict": by_verdict, "by_domain": by_domain}
+        return {"total": self.count(), "by_verdict": by_verdict}
 
     def latency_stats(self) -> dict:
         """Per-stage latency (mean / p50 / p90) over every recorded run.

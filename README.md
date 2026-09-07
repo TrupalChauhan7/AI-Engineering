@@ -1,10 +1,18 @@
 # Speech-to-Clinical-Note (s2n)
 
-Turn a GP consultation recording into a SOAP note — then **measure how faithful
-that note is and raise an reliability on unreliable ones.** The reliability is the star; the
-app is just the stage.
+Turn a GP consultation recording into a SOAP note — then **check every claim in
+that note against what was actually said, and flag the notes that are
+unreliable.** The reliability flag is the star; the app is just the stage.
 
 **Module:** ECS-8060 AI Engineering · **Author:** Trupal Chauhan · Dataset: PriMock57
+
+This repo holds two things: the **research** (the reliability method, validated on
+PriMock57 human ratings) and the **product** built around it — *Clarion*, a local
+web app that runs the pipeline and, around it, an **audit trail** (every run is
+stored with the exact models and prompt versions that produced it), a **reviewer
+dashboard** at `/audit`, request-id tracing and per-stage latency **metrics** for
+observability, and **one-command packaging** (`make run`, or Docker). The product
+is clinical-only. To run it, see **[DEPLOY.md](DEPLOY.md)**.
 
 ---
 
@@ -50,8 +58,10 @@ The setup file installs the rest for you, no admin rights needed:
 
 - **ffmpeg** — lets the app read audio files (downloaded into this folder).
 - **Ollama** — runs the AI models locally (portable version, no installer).
-- **Three AI models** — `medgemma:4b` (writes the note), `llama3.1:8b` (the
-  fact-checker/reliability), `atla/selene-mini` (the scoring judge). ~8 GB total.
+- **AI models (Ollama)** — the app needs two: `medgemma:4b` (writes the note) and
+  `llama3.1:8b` (the claim verifier / reliability check). A third, `atla/selene-mini`,
+  is pulled only to *reproduce the research* (the scoring judge) — not needed to run
+  the app. ~8 GB total for all three.
 - **Python libraries** — everything in `requirements.txt`.
 
 Everything runs **100% free and offline** once downloaded — no paid APIs, no
@@ -175,6 +185,13 @@ so the first upload is not the slow one.
 > **Data safety:** `app/web/public/samples/` holds transcript and note text and is
 > gitignored. Regenerate it locally; never commit it.
 
+Every real (uploaded) run is written to a local **audit trail** — open **`/audit`**
+in the app to browse past runs and open any one to see its full provenance (models,
+prompt versions, verdict bands, flagged claims). The same data is served at
+`GET /api/runs`, `/api/runs/{id}`, `/api/stats`, and `/api/metrics`. For running the
+product as a service (a preflight launcher and a Docker image that talks to Ollama on
+the host), see **[DEPLOY.md](DEPLOY.md)** — `make run`, `make check`, `make docker`.
+
 ---
 
 ## Reproduce the research pipeline (00 → 11)
@@ -214,7 +231,7 @@ the full artefacts stay local because they embed transcripts and gold notes.
 **Note:** the LoRA fine-tuning pipelines (`10`, `12_finetune_train`) use Apple
 **MLX** and run on Apple-Silicon Macs only; that experiment is complete and its
 results are in `results/finetune/`. Everything else — transcription, generation,
-the reliability, and the demo — runs on any OS.
+the reliability check, and the demo — runs on any OS.
 
 ---
 
@@ -245,7 +262,7 @@ src/s2n/            the code library (the engine)
   transcription/      Whisper wrapper                 (RQ2)
   generation/         transcript + prompt → note
   evaluation/         metrics + LLM-judge + highlights + correlation  ← the heart
-  reliability/              reliability flagger             ← the star
+  reliability/        turns the claim counts into a verdict (bands)   ← the star
   llm/                backend-agnostic client (swap freely, stay free)
 prompts/            versioned prompts (v1.0, v1.1 …)
 pipelines/          runnable scripts (00 → 12)

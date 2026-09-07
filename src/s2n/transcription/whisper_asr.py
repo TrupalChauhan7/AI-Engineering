@@ -85,7 +85,13 @@ class WhisperTranscriber:
         return self._model
 
     def transcribe(self, audio_path: str | Path) -> str:
-        """Return the ASR transcript text for one audio file (deterministic)."""
+        """Return the ASR transcript text for one audio file.
+
+        Decoding starts greedy (temperature 0) and only falls back to higher
+        temperatures on segments that fail Whisper's quality thresholds
+        (Amendment 3), so output is deterministic except on those rescued
+        segments.
+        """
         result = self.model.transcribe(
             str(audio_path),
             language=self.language,
