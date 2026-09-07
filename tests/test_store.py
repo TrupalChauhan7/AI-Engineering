@@ -182,3 +182,18 @@ def test_latency_stats_over_recorded_runs(store):
 
 def test_latency_stats_on_empty_store_is_all_none(store):
     assert store.latency_stats()["generate_s"] == {"n": 0, "mean": None, "p50": None, "p90": None}
+
+
+# --- hardening: unicode + large payloads round-trip ----------------------
+
+
+def test_unicode_and_large_payloads_round_trip(store):
+    big_note = "SOAP — café patient, 5 mg × 2 daily. " * 500  # unicode + long
+    result = {
+        **RESULT,
+        "note": big_note,
+        "reliability": {**RESULT["reliability"], "unsupported_claims": ["naïve claim ✓"]},
+    }
+    rec = store.get(store.record(result=result, cfg=CFG, source="transcript"))
+    assert rec["note"] == big_note
+    assert rec["unsupported_claims"] == ["naïve claim ✓"]

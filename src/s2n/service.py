@@ -43,6 +43,15 @@ from s2n.generation.generator import NoteGenerator
 from s2n.reliability.flagger import verdict
 from s2n.transcription.whisper_asr import WhisperTranscriber
 
+# Below this many words the "transcript" is not a consultation (silence, music,
+# a wrong file). Generating a note from it would INVENT one — the exact failure
+# a reliability tool exists to prevent — so the pipeline refuses instead.
+MIN_TRANSCRIPT_WORDS = 3
+
+
+class EmptyTranscriptError(ValueError):
+    """Raised when ASR yields too little text to be a real consultation."""
+
 
 def run_pipeline_staged(
     audio_path: str | Path | None = None,
@@ -79,6 +88,13 @@ def run_pipeline_staged(
         transcript = (transcriber or WhisperTranscriber(cfg)).transcribe(audio_path)
     transcribe_s = time.perf_counter() - t0
     yield {"stage": "transcribe", "status": "done", "transcript": transcript}
+
+    # --- guard: refuse to fabricate a note from a non-consultation ---------
+    if len((transcript or "").split()) < MIN_TRANSCRIPT_WORDS:
+        raise EmptyTranscriptError(
+            "No usable speech was detected in the audio. Please upload a clear "
+            "consultation recording."
+        )
 
     # --- 2. transcript -> SOAP note ---------------------------------------
     yield {"stage": "generate", "status": "running"}

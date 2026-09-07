@@ -88,8 +88,8 @@ def test_result_is_json_serialisable():
 def test_transcribes_audio_but_skips_asr_when_transcript_given():
     assert _run()["transcript"] == "Doctor: transcript of sample.wav"
     # a supplied transcript wins, and ASR is never called
-    out = _run(audio_path=None, transcript="pre-cached", transcriber=None)
-    assert out["transcript"] == "pre-cached"
+    out = _run(audio_path=None, transcript="Doctor: pre-cached transcript here.", transcriber=None)
+    assert out["transcript"] == "Doctor: pre-cached transcript here."
     assert out["timings"]["transcribe_s"] >= 0.0
 
 
@@ -149,3 +149,31 @@ def test_service_path_never_loads_the_answer_key():
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     ).stdout.strip()
     assert loaded == "", f"service imported an answer-side module: {loaded}"
+
+
+# --- hardening: refuse to fabricate a note from a non-consultation -------
+
+
+def test_empty_transcript_is_refused_not_summarised():
+    """Silence / a wrong file yields (near-)empty ASR; the pipeline must NOT
+    invent a note from it — the core failure a reliability tool prevents."""
+    from s2n.service import EmptyTranscriptError
+
+    with pytest.raises(EmptyTranscriptError):
+        _run(audio_path=None, transcript="   ", transcriber=None)
+
+
+def test_too_short_transcript_is_refused():
+    from s2n.service import EmptyTranscriptError
+
+    with pytest.raises(EmptyTranscriptError):
+        _run(audio_path=None, transcript="uh ok", transcriber=None)  # 2 words
+
+
+def test_a_real_transcript_still_runs():
+    out = _run(
+        audio_path=None,
+        transcript="Doctor: what brings you in today? Patient: a bad cough for three days.",
+        transcriber=None,
+    )
+    assert out["note"] and out["reliability"]["verdict"]
