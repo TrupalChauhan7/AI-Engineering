@@ -33,6 +33,7 @@ from app.api.spans import locate_claims
 from app.api.warmup import WarmPool
 from s2n.config import ROOT, load_config
 from s2n.service import run_pipeline_staged
+from s2n.store import RunStore
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("clarion")
@@ -42,17 +43,24 @@ ALLOWED_AUDIO = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".webm", ".mp4"}
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # a 30-min consultation WAV is ~55 MB
 
 POOL: WarmPool | None = None
+# The audit trail. Set on startup (lifespan) so the mocked API tests — which
+# construct TestClient WITHOUT running lifespan — leave it None and never touch
+# a real database. When None, /api/analyze simply skips recording and the
+# read routes answer 503; the server proper always has it.
+STORE: RunStore | None = None
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Load the demo models before the first request rather than during it."""
-    global POOL
+    global POOL, STORE
     cfg = load_config()
     POOL = WarmPool(cfg)
+    STORE = RunStore()  # results/runs.db — the durable audit trail
     await asyncio.to_thread(POOL.warm)  # never block the event loop
     yield
     POOL = None
+    STORE = None
 
 
 app = FastAPI(title="Clarion API", version="1.0.0", lifespan=lifespan)
@@ -118,7 +126,14 @@ def _sse(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
-def _analyze_stream(audio_path: Path, cfg: dict, components: dict, timeout_s: float):
+def _analyze_stream(
+    audio_path: Path,
+    cfg: dict,
+    components: dict,
+    timeout_s: float,
+    store: RunStore | None = None,
+    source_name: str | None = None,
+):
     """Yield SSE frames as each pipeline stage lands.
 
     The pipeline runs on a worker thread and reports through a queue, so this
@@ -130,6 +145,12 @@ def _analyze_stream(audio_path: Path, cfg: dict, components: dict, timeout_s: fl
 
     A ``heartbeat`` frame goes out every second while a stage is in flight, so
     the UI can prove liveness rather than showing a frozen label.
+
+    When ``store`` is given, the fully assembled result is persisted to the
+    audit trail once the run completes — AFTER the ``done`` frame is sent, so a
+    slow or failing database write can never delay or break the user's stream.
+    A run that errors or is abandoned is not recorded (there is no verdict to
+    audit).
     """
     events: queue.Queue = queue.Queue()
     stop = threading.Event()
@@ -149,6 +170,9 @@ def _analyze_stream(audio_path: Path, cfg: dict, components: dict, timeout_s: fl
     thread.start()
 
     note = ""  # request-local: never shared between concurrent streams
+    # request-local accumulator: the pieces of the final result, gathered as
+    # each stage lands, so the completed run can be recorded to the audit trail.
+    assembled: dict = {}
     stage = "transcribe"
     stage_started = time.perf_counter()
     try:
@@ -180,22 +204,49 @@ def _analyze_stream(audio_path: Path, cfg: dict, components: dict, timeout_s: fl
 
             event = payload
             if event["stage"] == "done":
+                assembled["timings"] = event["timings"]
                 yield _sse("done", {"timings": event["timings"]})
+                # the run is complete and the client has its result — now (and
+                # only now) persist it, so an audit write never blocks the stream
+                _record_run(store, assembled, cfg, source_name)
                 continue
 
             frame = dict(event)
             if frame.get("status") == "running":
                 stage = frame["stage"]
                 stage_started = time.perf_counter()
+            if frame.get("stage") == "transcribe" and frame.get("status") == "done":
+                assembled["transcript"] = frame["transcript"]
             if frame.get("stage") == "generate" and frame.get("status") == "done":
                 note = frame["note"]
+                assembled["note"] = note
             # give the UI the spans it needs to underline flagged text
             if "reliability" in frame:
+                assembled["reliability"] = frame["reliability"]
                 frame["spans"] = locate_claims(note, frame["reliability"]["unsupported_claims"])
             yield _sse("stage", frame)
     finally:
         stop.set()  # cancel / disconnect: stop at the next stage boundary
         shutil.rmtree(audio_path.parent, ignore_errors=True)
+
+
+def _record_run(
+    store: RunStore | None, assembled: dict, cfg: dict, source_name: str | None
+) -> None:
+    """Persist a completed run to the audit trail, swallowing any storage error.
+
+    Auditing must never degrade the product: if the database write fails, the
+    user has already received their result, so we log and move on rather than
+    surfacing a 500. A run missing its verdict (never reached ``reliability``)
+    is not recorded — there is nothing to audit.
+    """
+    if store is None or "reliability" not in assembled:
+        return
+    try:
+        run_id = store.record(assembled, cfg=cfg, source="audio", source_name=source_name)
+        log.info("recorded run %s (verdict=%s)", run_id, assembled["reliability"].get("verdict"))
+    except Exception as exc:  # noqa: BLE001 — auditing is best-effort, never fatal
+        log.warning("audit store write failed: %s", exc)
 
 
 @app.post("/api/analyze")
@@ -228,7 +279,7 @@ async def analyze(audio: UploadFile) -> StreamingResponse:
     timeout_s = float(load_config().get("demo", {}).get("stage_timeout_s", 300))
 
     return StreamingResponse(
-        _analyze_stream(dest, cfg, components, timeout_s),
+        _analyze_stream(dest, cfg, components, timeout_s, store=STORE, source_name=audio.filename),
         media_type="text/event-stream",
         headers={
             # `no-transform` is the load-bearing one: browsers send
@@ -257,4 +308,42 @@ def health() -> dict:
             "reliable_max": int(bands["reliable_max"]),
             "unreliable_min": int(bands["unreliable_min"]),
         },
+        "audit_runs": STORE.count() if STORE else None,
     }
+
+
+# --------------------------------------------------------------------------
+# audit trail — the record of every completed run (see s2n.store)
+#
+# WHY these are read-only and separate from /api/analyze: analysing PRODUCES a
+# record as a side effect; these routes CONSULT the record after the fact. A
+# regulated deployment needs exactly this split — you look up what was decided
+# and prove which models/prompts produced it, without re-running anything.
+# --------------------------------------------------------------------------
+
+
+@app.get("/api/runs")
+def list_runs(limit: int = 50, domain: str | None = None) -> list[dict]:
+    """Recent runs, newest first (summary fields only). Optionally filter by domain."""
+    if STORE is None:
+        raise HTTPException(status_code=503, detail="Audit store is not initialised.")
+    return STORE.list(limit=limit, domain=domain)
+
+
+@app.get("/api/runs/{run_id}")
+def get_run(run_id: str) -> dict:
+    """The full stored record for one run — transcript, note, flags, and provenance."""
+    if STORE is None:
+        raise HTTPException(status_code=503, detail="Audit store is not initialised.")
+    record = STORE.get(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Unknown run id.")
+    return record
+
+
+@app.get("/api/stats")
+def audit_stats() -> dict:
+    """Aggregate counts across the audit trail — by verdict and by domain."""
+    if STORE is None:
+        raise HTTPException(status_code=503, detail="Audit store is not initialised.")
+    return STORE.stats()

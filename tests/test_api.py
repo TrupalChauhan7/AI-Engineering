@@ -332,3 +332,83 @@ def test_finetune_command_matches_the_recorded_adapter_config():
     joined = " ".join(mod.COMMAND)
     for expected in ("--train", "--num-layers 16", "--batch-size 2", "--iters 1500"):
         assert expected in joined
+
+
+# --- audit trail: persistence + read routes ------------------------------
+#
+# The store is injected as a temp DB (never the real results/runs.db). The
+# mocked pipeline (_fake_staged) drives a full run, so we can assert the
+# completed run was recorded, with its provenance, and served back.
+
+
+@pytest.fixture
+def audited_client(client, tmp_path, monkeypatch):
+    """A client whose module-level STORE points at a throwaway database."""
+    from s2n.store import RunStore
+
+    store = RunStore(tmp_path / "audit.db")
+    monkeypatch.setattr(api, "STORE", store)
+    return client, store
+
+
+def test_analyze_records_the_completed_run(audited_client, monkeypatch):
+    client, store = audited_client
+    monkeypatch.setattr(api, "run_pipeline_staged", _fake_staged)
+
+    r = client.post("/api/analyze", files={"audio": ("visit.wav", b"RIFFfake", "audio/wav")})
+    # drain the stream so the run completes and _record_run fires
+    _parse_sse(r.text)
+
+    assert store.count() == 1
+    rec = store.get(store.list()[0]["run_id"])
+    assert rec["verdict"] == "reliable"
+    assert rec["source"] == "audio" and rec["source_name"] == "visit.wav"
+    assert rec["note"] == NOTE
+    assert rec["unsupported_claims"] == ["No blood in the stool was reported"]
+    # provenance was captured from the resolved config
+    assert rec["generator_model"] and rec["verifier_model"]
+    assert rec["domain"]
+
+
+def test_analyze_does_not_record_a_failed_run(audited_client, monkeypatch):
+    client, store = audited_client
+
+    def boom(**_kw):
+        yield {"stage": "transcribe", "status": "running"}
+        raise RuntimeError("whisper exploded")
+
+    monkeypatch.setattr(api, "run_pipeline_staged", boom)
+    r = client.post("/api/analyze", files={"audio": ("c.wav", b"RIFFfake", "audio/wav")})
+    _parse_sse(r.text)
+    assert store.count() == 0  # nothing to audit without a verdict
+
+
+def test_runs_routes_list_get_and_stats(audited_client, monkeypatch):
+    client, store = audited_client
+    monkeypatch.setattr(api, "run_pipeline_staged", _fake_staged)
+    _parse_sse(client.post("/api/analyze", files={"audio": ("a.wav", b"RIFF", "audio/wav")}).text)
+
+    listing = client.get("/api/runs").json()
+    assert len(listing) == 1 and listing[0]["verdict"] == "reliable"
+    # the list stays light — no transcript/note in summary rows
+    assert "transcript" not in listing[0] and "note" not in listing[0]
+
+    run_id = listing[0]["run_id"]
+    full = client.get(f"/api/runs/{run_id}").json()
+    assert full["note"] == NOTE and full["source_name"] == "a.wav"
+
+    stats = client.get("/api/stats").json()
+    assert stats["total"] == 1 and stats["by_verdict"] == {"reliable": 1}
+
+
+def test_unknown_run_is_404(audited_client):
+    client, _ = audited_client
+    assert client.get("/api/runs/nope").status_code == 404
+
+
+def test_audit_routes_are_503_when_store_uninitialised(client, monkeypatch):
+    """Without lifespan (STORE is None) the read routes fail cleanly, not with a 500."""
+    monkeypatch.setattr(api, "STORE", None)
+    assert client.get("/api/runs").status_code == 503
+    assert client.get("/api/runs/x").status_code == 503
+    assert client.get("/api/stats").status_code == 503
