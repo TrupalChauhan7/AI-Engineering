@@ -412,3 +412,69 @@ def test_audit_routes_are_503_when_store_uninitialised(client, monkeypatch):
     assert client.get("/api/runs").status_code == 503
     assert client.get("/api/runs/x").status_code == 503
     assert client.get("/api/stats").status_code == 503
+
+
+# --- domain-aware routing ------------------------------------------------
+#
+# The pipeline is domain-general; the API must let a caller pick the domain per
+# request. Constructing a NoteGenerator/ClaimVerifier is offline (models load
+# only when actually called), so these run without a network or warm pool.
+
+
+def test_components_for_reuses_warm_default_and_builds_other_domain():
+    from app.api.warmup import WarmPool
+    from s2n.config import load_config, load_config_for_domain
+    from s2n.evaluation.claim_verifier import ClaimVerifier
+    from s2n.generation.generator import NoteGenerator
+
+    pool = WarmPool(load_config())  # __init__ only — no warm() (no models loaded)
+    pool.transcriber, pool.generator, pool.verifier = "ASR", "GEN", "VER"
+
+    # the warm default domain reuses the warm trio verbatim
+    same = pool.components_for(load_config_for_domain(pool.domain))
+    assert same == {"transcriber": "ASR", "generator": "GEN", "verifier": "VER"}
+
+    # a different domain reuses the ASR but builds its own generator + verifier
+    other = "meetings" if pool.domain != "meetings" else "clinical"
+    built = pool.components_for(load_config_for_domain(other))
+    assert built["transcriber"] == "ASR"  # ASR is domain-independent
+    assert isinstance(built["generator"], NoteGenerator)
+    assert isinstance(built["verifier"], ClaimVerifier)
+
+    # cached: a second request in that domain reuses the same instances
+    again = pool.components_for(load_config_for_domain(other))
+    assert again["generator"] is built["generator"]
+    assert again["verifier"] is built["verifier"]
+
+
+def test_domains_route_lists_what_the_server_can_run(client):
+    d = client.get("/api/domains").json()
+    assert set(d["available"]) >= {"clinical", "meetings"}
+    assert d["default"]  # a default domain is always resolved
+
+
+def test_analyze_rejects_an_unknown_domain(client):
+    r = client.post(
+        "/api/analyze",
+        files={"audio": ("c.wav", b"RIFFfake", "audio/wav")},
+        data={"domain": "banana"},
+    )
+    assert r.status_code == 400 and "Unknown domain" in r.json()["detail"]
+
+
+def test_analyze_records_the_requested_domain(audited_client, monkeypatch):
+    """A meetings request must run — and be audited as — the meetings stack."""
+    client, store = audited_client
+    monkeypatch.setattr(api, "run_pipeline_staged", _fake_staged)
+
+    r = client.post(
+        "/api/analyze",
+        files={"audio": ("m.wav", b"RIFFfake", "audio/wav")},
+        data={"domain": "meetings"},
+    )
+    _parse_sse(r.text)
+
+    rec = store.get(store.list()[0]["run_id"])
+    assert rec["domain"] == "meetings"
+    assert rec["generator_model"] == "qwen3:14b"
+    assert rec["verify_prompt"] == "claim_verify_v2"

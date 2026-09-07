@@ -27,13 +27,38 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
     return _apply_domain(cfg)
 
 
-def _apply_domain(cfg: dict) -> dict:
-    """Overlay the active ``domain`` profile's overrides onto the base config.
+def load_config_for_domain(domain: str | None, path: Path = CONFIG_PATH) -> dict:
+    """Return the config resolved for a SPECIFIC domain, ignoring ``S2N_DOMAIN``.
+
+    The server needs to pick a domain per request, so an explicit choice must
+    win over both the file's ``domain`` and the ``S2N_DOMAIN`` env var (which is
+    a single-run override for scripts, not a per-request signal). ``domain=None``
+    falls back to the file's default. Unknown domains raise so a bad request
+    fails loudly rather than silently running the wrong pipeline.
+    """
+    with open(path, "r") as f:
+        cfg = yaml.safe_load(f)
+    if domain is not None and domain not in (cfg.get("domains") or {}):
+        raise ValueError(f"unknown domain '{domain}'; known: {available_domains(cfg)}")
+    return _apply_domain(cfg, name=domain)
+
+
+def available_domains(cfg: dict) -> list[str]:
+    """The domain names defined in the config (e.g. ['clinical', 'meetings'])."""
+    return list((cfg.get("domains") or {}).keys())
+
+
+def _apply_domain(cfg: dict, name: str | None = None) -> dict:
+    """Overlay a ``domain`` profile's overrides onto the base config.
 
     Behaviour-preserving: with domain=clinical the overrides equal the base
     values, so the resolved config is identical to the academic setup.
+
+    ``name`` selects the profile explicitly (used by the per-request server
+    path); when omitted, the precedence is ``S2N_DOMAIN`` env then the file's
+    ``domain`` — the original script behaviour, unchanged.
     """
-    name = os.environ.get("S2N_DOMAIN") or cfg.get("domain")
+    name = name or os.environ.get("S2N_DOMAIN") or cfg.get("domain")
     profile = (cfg.get("domains") or {}).get(name)
     if not profile:
         return cfg

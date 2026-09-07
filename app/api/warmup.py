@@ -38,11 +38,17 @@ class WarmPool:
 
     def __init__(self, cfg: dict):
         self.cfg = demo_config(cfg)
+        self.domain = self.cfg.get("active_domain") or self.cfg.get("domain")
         self.transcriber: WhisperTranscriber | None = None
         self.generator: NoteGenerator | None = None
         self.verifier: ClaimVerifier | None = None
         self.ready = False
         self.asr_model = self.cfg["transcription"]["model"]
+        # generator+verifier built for a non-default domain on first use, cached
+        # by domain so a second request in that domain reuses them. The verifier
+        # MODEL (llama3.1:8b) is shared across domains, so only the generator's
+        # model actually differs — Ollama keeps whichever is resident.
+        self._by_domain: dict[str, tuple[NoteGenerator, ClaimVerifier]] = {}
 
     def warm(self) -> None:
         """Load Whisper and make Ollama resident. Safe to fail — we degrade."""
@@ -75,9 +81,31 @@ class WarmPool:
         log.info("models warmed in %.1fs (asr=%s)", time.perf_counter() - t0, self.asr_model)
 
     def components(self) -> dict:
-        """Injection kwargs for ``run_pipeline_staged``."""
+        """Injection kwargs for ``run_pipeline_staged`` (the warm default domain)."""
         return {
             "transcriber": self.transcriber,
             "generator": self.generator,
             "verifier": self.verifier,
+        }
+
+    def components_for(self, cfg: dict) -> dict:
+        """Injection kwargs for ``run_pipeline_staged`` in the domain of ``cfg``.
+
+        The transcriber is domain-independent (ASR does not vary by domain), so
+        the warm instance is ALWAYS reused. The generator and verifier bind their
+        model + prompts at construction, so a non-default domain needs its own
+        pair — built once and cached. This keeps the memory footprint honest: one
+        warm generator at startup, others created only when actually requested.
+        """
+        domain = cfg.get("active_domain") or cfg.get("domain")
+        if domain == self.domain:
+            return self.components()
+        if domain not in self._by_domain:
+            log.info("building components for domain '%s' (first request)", domain)
+            self._by_domain[domain] = (NoteGenerator(cfg), ClaimVerifier(cfg))
+        generator, verifier = self._by_domain[domain]
+        return {
+            "transcriber": self.transcriber,  # ASR is domain-independent
+            "generator": generator,
+            "verifier": verifier,
         }
