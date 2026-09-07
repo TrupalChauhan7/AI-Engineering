@@ -478,3 +478,38 @@ def test_analyze_records_the_requested_domain(audited_client, monkeypatch):
     assert rec["domain"] == "meetings"
     assert rec["generator_model"] == "qwen3:14b"
     assert rec["verify_prompt"] == "claim_verify_v2"
+
+
+# --- observability: request id, metrics ----------------------------------
+
+
+def test_every_response_carries_a_request_id_header(client):
+    assert client.get("/api/health").headers.get("X-Request-ID")
+
+
+def test_analyze_stores_the_request_id_from_the_header(audited_client, monkeypatch):
+    """The audited run must be findable from the request's trace id."""
+    client, store = audited_client
+    monkeypatch.setattr(api, "run_pipeline_staged", _fake_staged)
+
+    r = client.post("/api/analyze", files={"audio": ("a.wav", b"RIFFfake", "audio/wav")})
+    _parse_sse(r.text)  # drain so the run is recorded
+
+    rec = store.get(store.list()[0]["run_id"])
+    assert rec["request_id"] == r.headers["X-Request-ID"]
+
+
+def test_metrics_reports_counts_and_per_stage_latency(audited_client, monkeypatch):
+    client, store = audited_client
+    monkeypatch.setattr(api, "run_pipeline_staged", _fake_staged)
+    _parse_sse(client.post("/api/analyze", files={"audio": ("a.wav", b"RIFF", "audio/wav")}).text)
+
+    m = client.get("/api/metrics").json()
+    assert m["total"] == 1 and m["by_verdict"] == {"reliable": 1}
+    assert set(m["latency_s"]) == {"transcribe_s", "generate_s", "reliability_s"}
+    assert m["latency_s"]["generate_s"]["n"] == 1
+
+
+def test_metrics_is_503_when_store_uninitialised(client, monkeypatch):
+    monkeypatch.setattr(api, "STORE", None)
+    assert client.get("/api/metrics").status_code == 503

@@ -157,3 +157,28 @@ def test_store_module_never_loads_the_answer_key():
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     ).stdout.strip()
     assert loaded == "", f"store imported an answer-side module: {loaded}"
+
+
+# --- observability: request-id correlation + latency stats ---------------
+
+
+def test_request_id_is_stored_and_summarised(store):
+    rid = store.record(result=RESULT, cfg=CFG, source="audio", request_id="req-abc123")
+    assert store.get(rid)["request_id"] == "req-abc123"
+    assert store.list()[0]["request_id"] == "req-abc123"
+
+
+def test_latency_stats_over_recorded_runs(store):
+    for g in (10.0, 20.0, 30.0):
+        r = {**RESULT, "timings": {"transcribe_s": 1.0, "generate_s": g, "reliability_s": 5.0}}
+        store.record(result=r, cfg=CFG, source="transcript")
+    lat = store.latency_stats()
+    assert lat["generate_s"]["n"] == 3
+    assert lat["generate_s"]["mean"] == 20.0
+    assert lat["generate_s"]["p50"] == 20.0
+    assert lat["generate_s"]["p90"] == 28.0
+    assert lat["transcribe_s"]["mean"] == 1.0
+
+
+def test_latency_stats_on_empty_store_is_all_none(store):
+    assert store.latency_stats()["generate_s"] == {"n": 0, "mean": None, "p50": None, "p90": None}

@@ -29,6 +29,7 @@ answer key into the served path.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -48,6 +49,7 @@ _JSON_COLUMNS = frozenset({"unsupported_claims", "omitted_facts", "timings"})
 # Column order is the table's contract; _row_to_dict and the INSERT both rely on it.
 _COLUMNS = (
     "run_id",
+    "request_id",
     "created_at",
     "domain",
     "source",
@@ -76,6 +78,7 @@ _COLUMNS = (
 # history page stays cheap even with thousands of rows.
 _SUMMARY_COLUMNS = (
     "run_id",
+    "request_id",
     "created_at",
     "domain",
     "source",
@@ -86,6 +89,10 @@ _SUMMARY_COLUMNS = (
     "combined",
     "verdict",
 )
+
+# The per-stage timing keys the pipeline reports (s2n.service). latency_stats
+# reads these out of the stored ``timings`` JSON.
+_TIMING_KEYS = ("transcribe_s", "generate_s", "reliability_s")
 
 
 def _column_ddl(name: str) -> str:
@@ -125,6 +132,7 @@ class RunStore:
         source: str,
         source_name: str | None = None,
         run_id: str | None = None,
+        request_id: str | None = None,
         created_at: str | None = None,
     ) -> str:
         """Persist one completed run and return its ``run_id``.
@@ -132,9 +140,10 @@ class RunStore:
         ``result`` is exactly what ``s2n.service.run_pipeline`` returns; ``cfg``
         is the resolved config it ran under (the source of provenance). ``source``
         is ``"audio"`` or ``"transcript"``; ``source_name`` an optional label
-        (e.g. the uploaded filename). A ``run_id`` / ``created_at`` may be passed
-        for determinism in tests; otherwise a uuid4 and the current UTC time are
-        used.
+        (e.g. the uploaded filename). ``request_id`` correlates the row with the
+        request's log lines (observability). A ``run_id`` / ``created_at`` may be
+        passed for determinism in tests; otherwise a uuid4 and the current UTC
+        time are used.
         """
         run_id = run_id or uuid.uuid4().hex
         created_at = created_at or datetime.now(timezone.utc).isoformat()
@@ -144,6 +153,7 @@ class RunStore:
 
         values = {
             "run_id": run_id,
+            "request_id": request_id,
             "created_at": created_at,
             "domain": cfg.get("active_domain") or cfg.get("domain"),
             "source": source,
@@ -220,6 +230,51 @@ class RunStore:
                 ).fetchall()
             }
         return {"total": self.count(), "by_verdict": by_verdict, "by_domain": by_domain}
+
+    def latency_stats(self) -> dict:
+        """Per-stage latency (mean / p50 / p90) over every recorded run.
+
+        The operational companion to :meth:`stats`: turns the timings already
+        stored with each run into a picture of how the pipeline performs. Stages
+        are ``transcribe`` / ``generate`` / ``reliability`` (seconds).
+        """
+        samples: dict[str, list[float]] = {k: [] for k in _TIMING_KEYS}
+        with self._connect() as conn:
+            for (raw,) in conn.execute("SELECT timings FROM runs"):
+                try:
+                    timings = json.loads(raw) if raw else {}
+                except (TypeError, json.JSONDecodeError):
+                    continue
+                for key in _TIMING_KEYS:
+                    val = timings.get(key)
+                    if isinstance(val, (int, float)):
+                        samples[key].append(float(val))
+        return {key: _summary(vals) for key, vals in samples.items()}
+
+
+def _percentile(values: list[float], pct: float) -> float:
+    """Linear-interpolated percentile (pct in [0, 1]) of a non-empty list."""
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    rank = (len(ordered) - 1) * pct
+    low = math.floor(rank)
+    high = math.ceil(rank)
+    if low == high:
+        return ordered[low]
+    return ordered[low] * (high - rank) + ordered[high] * (rank - low)
+
+
+def _summary(values: list[float]) -> dict:
+    """{n, mean, p50, p90} for a stage's latency samples (Nones when empty)."""
+    if not values:
+        return {"n": 0, "mean": None, "p50": None, "p90": None}
+    return {
+        "n": len(values),
+        "mean": round(sum(values) / len(values), 3),
+        "p50": round(_percentile(values, 0.5), 3),
+        "p90": round(_percentile(values, 0.9), 3),
+    }
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:

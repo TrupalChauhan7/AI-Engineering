@@ -22,10 +22,11 @@ import shutil
 import tempfile
 import threading
 import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -72,6 +73,38 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_id_and_access_log(request: Request, call_next):
+    """Give every request a trace id, log one access line, echo the id back.
+
+    WHY: observability starts with being able to follow a single request. Each
+    gets a short ``request_id`` (honoured from an inbound ``X-Request-ID`` if a
+    proxy set one), attached to ``request.state`` so handlers can log and store
+    it, echoed in the response header so a client/log can correlate. The access
+    line records method, path, status, and wall time.
+
+    NOTE: for the streamed ``/api/analyze`` the timing here covers only setup —
+    the body streams AFTER this returns — so the true per-run latency is logged
+    when the run completes (see ``_record_run``). This line still pins the
+    request id and final status for that call.
+    """
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    request.state.request_id = request_id
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    dur_ms = (time.perf_counter() - t0) * 1000
+    response.headers["X-Request-ID"] = request_id
+    log.info(
+        "%s %s -> %d %.1fms [%s]",
+        request.method,
+        request.url.path,
+        response.status_code,
+        dur_ms,
+        request_id,
+    )
+    return response
 
 
 # --------------------------------------------------------------------------
@@ -133,6 +166,7 @@ def _analyze_stream(
     timeout_s: float,
     store: RunStore | None = None,
     source_name: str | None = None,
+    request_id: str | None = None,
 ):
     """Yield SSE frames as each pipeline stage lands.
 
@@ -182,7 +216,9 @@ def _analyze_stream(
             except queue.Empty:
                 waited = time.perf_counter() - stage_started
                 if waited > timeout_s:
-                    log.warning("stage '%s' exceeded %.0fs — aborting", stage, timeout_s)
+                    log.warning(
+                        "stage '%s' exceeded %.0fs — aborting [%s]", stage, timeout_s, request_id
+                    )
                     yield _sse(
                         "error",
                         {
@@ -199,6 +235,7 @@ def _analyze_stream(
             if kind == "end":
                 return
             if kind == "error":
+                log.warning("pipeline failed at stage '%s': %s [%s]", stage, payload, request_id)
                 yield _sse("error", {"message": payload})
                 return
 
@@ -208,7 +245,7 @@ def _analyze_stream(
                 yield _sse("done", {"timings": event["timings"]})
                 # the run is complete and the client has its result — now (and
                 # only now) persist it, so an audit write never blocks the stream
-                _record_run(store, assembled, cfg, source_name)
+                _record_run(store, assembled, cfg, source_name, request_id)
                 continue
 
             frame = dict(event)
@@ -231,7 +268,11 @@ def _analyze_stream(
 
 
 def _record_run(
-    store: RunStore | None, assembled: dict, cfg: dict, source_name: str | None
+    store: RunStore | None,
+    assembled: dict,
+    cfg: dict,
+    source_name: str | None,
+    request_id: str | None = None,
 ) -> None:
     """Persist a completed run to the audit trail, swallowing any storage error.
 
@@ -239,18 +280,41 @@ def _record_run(
     user has already received their result, so we log and move on rather than
     surfacing a 500. A run missing its verdict (never reached ``reliability``)
     is not recorded — there is nothing to audit.
+
+    This is also where the per-run OBSERVABILITY line is emitted: the true
+    end-to-end timings (the access-log line covers only stream setup), tagged
+    with the request id so a run in the log ties back to its HTTP call.
     """
-    if store is None or "reliability" not in assembled:
+    rel = assembled.get("reliability")
+    timings = assembled.get("timings", {})
+    if rel is not None:
+        log.info(
+            "run complete [%s] domain=%s verdict=%s combined=%s timings=%s",
+            request_id,
+            cfg.get("active_domain") or cfg.get("domain"),
+            rel.get("verdict"),
+            rel.get("combined"),
+            timings,
+        )
+    if store is None or rel is None:
         return
     try:
-        run_id = store.record(assembled, cfg=cfg, source="audio", source_name=source_name)
-        log.info("recorded run %s (verdict=%s)", run_id, assembled["reliability"].get("verdict"))
+        run_id = store.record(
+            assembled,
+            cfg=cfg,
+            source="audio",
+            source_name=source_name,
+            request_id=request_id,
+        )
+        log.info("recorded run %s [%s]", run_id, request_id)
     except Exception as exc:  # noqa: BLE001 — auditing is best-effort, never fatal
-        log.warning("audit store write failed: %s", exc)
+        log.warning("audit store write failed [%s]: %s", request_id, exc)
 
 
 @app.post("/api/analyze")
-async def analyze(audio: UploadFile, domain: str | None = Form(default=None)) -> StreamingResponse:
+async def analyze(
+    request: Request, audio: UploadFile, domain: str | None = Form(default=None)
+) -> StreamingResponse:
     """Run the real pipeline on an uploaded consultation, streaming each stage.
 
     ``domain`` (form field, optional) selects which pipeline runs — e.g.
@@ -296,9 +360,18 @@ async def analyze(audio: UploadFile, domain: str | None = Form(default=None)) ->
         cfg = demo_config(load_config_for_domain(domain))
     components = POOL.components_for(cfg) if POOL else {}
     timeout_s = float(load_config().get("demo", {}).get("stage_timeout_s", 300))
+    request_id = getattr(request.state, "request_id", None)
 
     return StreamingResponse(
-        _analyze_stream(dest, cfg, components, timeout_s, store=STORE, source_name=audio.filename),
+        _analyze_stream(
+            dest,
+            cfg,
+            components,
+            timeout_s,
+            store=STORE,
+            source_name=audio.filename,
+            request_id=request_id,
+        ),
         media_type="text/event-stream",
         headers={
             # `no-transform` is the load-bearing one: browsers send
@@ -382,3 +455,15 @@ def audit_stats() -> dict:
     if STORE is None:
         raise HTTPException(status_code=503, detail="Audit store is not initialised.")
     return STORE.stats()
+
+
+@app.get("/api/metrics")
+def metrics() -> dict:
+    """Operational view: run counts (by verdict/domain) plus per-stage latency.
+
+    Built entirely from what the audit trail already stores, so it costs nothing
+    extra to keep and never drifts from what actually ran.
+    """
+    if STORE is None:
+        raise HTTPException(status_code=503, detail="Audit store is not initialised.")
+    return {**STORE.stats(), "latency_s": STORE.latency_stats()}
