@@ -56,3 +56,19 @@ def test_explicit_domain_beats_the_env_var(monkeypatch):
     """The server picks a domain per request; S2N_DOMAIN must not override it."""
     monkeypatch.setenv("S2N_DOMAIN", "clinical")
     assert load_config_for_domain("meetings")["active_domain"] == "meetings"
+
+
+# --- deployment: Ollama host override (packaging) ------------------------
+
+
+def test_ollama_host_env_override(monkeypatch):
+    """S2N_OLLAMA_HOST repoints the backend without editing config (Docker/remote)."""
+    monkeypatch.setenv("S2N_OLLAMA_HOST", "http://host.docker.internal:11434")
+    assert load_config()["llm"]["host"] == "http://host.docker.internal:11434"
+    # domain resolution honours it too
+    assert load_config_for_domain("meetings")["llm"]["host"] == "http://host.docker.internal:11434"
+
+
+def test_ollama_host_defaults_without_env(monkeypatch):
+    monkeypatch.delenv("S2N_OLLAMA_HOST", raising=False)
+    assert load_config()["llm"]["host"] == "http://localhost:11434"

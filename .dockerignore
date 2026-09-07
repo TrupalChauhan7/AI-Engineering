@@ -1,0 +1,41 @@
+# Keep the build context tiny and the image clean. The service needs only
+# src/, app/api/, config/, prompts/ and the two dependency files (see Dockerfile).
+
+# --- big non-service data (never belongs in a service image) ---
+primock57/
+data/
+models/
+results/
+graphify-out/
+experiments/
+media/
+*.wav
+*.mp3
+*.m4a
+*.flac
+
+# --- the frontend builds separately (Node), not in this Python image ---
+app/web/
+
+# --- research/eval code the API never imports ---
+pipelines/
+scripts/
+notebooks/
+docs/
+
+# --- caches, envs, VCS, editor cruft ---
+.git/
+.github/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+node_modules/
+.DS_Store
+*.log
+tests/
+.Rhistory
+~$*

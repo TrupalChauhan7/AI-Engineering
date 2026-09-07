@@ -1,0 +1,38 @@
+# =============================================================================
+#  Clarion API — one command to run the containerised backend.
+#
+#      docker compose up --build
+#
+#  PREREQUISITE (on the HOST, not in the container): Ollama running with the
+#  models pulled. The container talks to it over HTTP.
+#      ollama serve            # if not already running
+#      ollama pull medgemma:4b && ollama pull qwen3:14b && ollama pull llama3.1:8b
+#
+#  Then: http://localhost:8000/api/health  ·  /api/domains  ·  /api/metrics
+# =============================================================================
+
+services:
+  api:
+    build: .
+    image: clarion-api
+    ports:
+      - "8000:8000"
+    environment:
+      # WHERE the models run. host.docker.internal resolves to the host on
+      # Docker Desktop (macOS/Windows); the extra_hosts line below makes the
+      # same name work on Linux.
+      S2N_OLLAMA_HOST: http://host.docker.internal:11434
+      # WHICH pipeline is the default/warm one (clinical | meetings).
+      S2N_DOMAIN: clinical
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux: map the name to the host
+    volumes:
+      # Persist the audit trail (results/runs.db) and Whisper's downloaded
+      # weights across restarts, so history survives and models are not re-fetched.
+      - clarion_results:/app/results
+      - clarion_whisper:/root/.cache/whisper
+    restart: unless-stopped
+
+volumes:
+  clarion_results:
+  clarion_whisper:

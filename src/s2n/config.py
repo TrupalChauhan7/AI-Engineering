@@ -48,6 +48,20 @@ def available_domains(cfg: dict) -> list[str]:
     return list((cfg.get("domains") or {}).keys())
 
 
+def _apply_env_overrides(cfg: dict) -> None:
+    """Apply deployment overrides that must come from the environment, in place.
+
+    ``S2N_OLLAMA_HOST`` repoints the LLM backend without editing the config —
+    the one setting that changes between machines (localhost in dev, e.g.
+    ``http://host.docker.internal:11434`` from a container, or a remote host).
+    Kept separate from domain logic because it is about WHERE the models run,
+    not WHICH models.
+    """
+    host = os.environ.get("S2N_OLLAMA_HOST")
+    if host and "llm" in cfg:
+        cfg["llm"]["host"] = host
+
+
 def _apply_domain(cfg: dict, name: str | None = None) -> dict:
     """Overlay a ``domain`` profile's overrides onto the base config.
 
@@ -58,6 +72,7 @@ def _apply_domain(cfg: dict, name: str | None = None) -> dict:
     path); when omitted, the precedence is ``S2N_DOMAIN`` env then the file's
     ``domain`` — the original script behaviour, unchanged.
     """
+    _apply_env_overrides(cfg)
     name = name or os.environ.get("S2N_DOMAIN") or cfg.get("domain")
     profile = (cfg.get("domains") or {}).get(name)
     if not profile:

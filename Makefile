@@ -25,3 +25,15 @@ samples:      ## pre-compute the demo sample consultations (gitignored output)
 finetune-train:   ## reproduce the Phase-15b LoRA adapter (Track B). SLOW — hours, ~14.4 GB.
 	@echo "Reproduces results/finetune/best_adapter. Use DRY=1 to just print the command."
 	python pipelines/12_finetune_train.py $(if $(DRY),--dry-run,)
+
+run:          ## preflight (Ollama + models + Node) then launch the product
+	python scripts/run_product.py
+
+check:        ## preflight only, do not launch
+	python scripts/run_product.py --check
+
+docker:       ## build + run the containerised API (needs Ollama on the host)
+	docker compose up --build
+
+docker-down:  ## stop and remove the API container
+	docker compose down
