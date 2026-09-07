@@ -27,6 +27,10 @@ export interface AnalysisState {
   stageStartedAt: number | null;
   /** true once the server has confirmed the stream is alive */
   streaming: boolean;
+  /** the request's trace id (upload only) — ties the run to the audit trail */
+  requestId: string | null;
+  /** true once a live run has completed and been written to the audit trail */
+  recorded: boolean;
 }
 
 const EMPTY: AnalysisState = {
@@ -41,6 +45,8 @@ const EMPTY: AnalysisState = {
   sampleId: null,
   stageStartedAt: null,
   streaming: false,
+  requestId: null,
+  recorded: false,
 };
 
 /** Scripted replay cadence (ms) — long enough to read, short enough to hold. */
@@ -128,6 +134,10 @@ export function useAnalysis() {
         throw new Error(detail?.detail ?? `Request failed (${res.status})`);
       }
 
+      // the trace id ties this run to its row in the audit trail
+      const requestId = res.headers.get("X-Request-ID");
+      if (requestId && alive()) setState((s) => ({ ...s, requestId }));
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -211,12 +221,14 @@ function applyEvent(
     return;
   }
   if (event === "done") {
+    // reaching applyEvent means this was a live upload — the server records it
     setState((s) => ({
       ...s,
       stage: "done",
       live: false,
       stageStartedAt: null,
       timings: p.timings as Timings,
+      recorded: true,
     }));
     return;
   }

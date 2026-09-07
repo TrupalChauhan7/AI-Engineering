@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EASE, fadeUp, sectionReveal } from "@/lib/motion";
 import { useAnalysis } from "@/lib/useAnalysis";
@@ -8,6 +9,7 @@ import type { SampleMeta } from "@/lib/types";
 import ReliabilityPanel from "./analysis/ReliabilityPanel";
 import NotePanel from "./analysis/NotePanel";
 import TranscriptPanel from "./analysis/TranscriptPanel";
+import Tether from "./analysis/Tether";
 import { Elapsed, LivePulse } from "./StageProgress";
 import Waveform from "./Waveform";
 
@@ -28,9 +30,10 @@ export default function Workspace() {
   const [copied, setCopied] = useState(false);
   const [unreliableMin, setUnreliableMin] = useState(12);
   const fileRef = useRef<HTMLInputElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // the ring scales against the real config band, not a magic number
+    // the verdict ring scales against the real config band, not a magic number
     fetch("/api/health")
       .then((r) => (r.ok ? r.json() : null))
       .then((h) => h?.reliability?.unreliable_min && setUnreliableMin(h.reliability.unreliable_min))
@@ -82,9 +85,7 @@ export default function Workspace() {
       >
         <span className="t-label text-[var(--color-ink-mute)]">Consultation</span>
 
-        {!samplesLoaded && (
-          <span className="t-label text-[var(--color-ink-faint)]">loading…</span>
-        )}
+        {!samplesLoaded && <span className="t-label text-[var(--color-ink-faint)]">loading…</span>}
 
         {samplesLoaded && samples.length === 0 && (
           <span className="t-label text-[var(--color-ink-faint)]">
@@ -120,6 +121,12 @@ export default function Workspace() {
         </div>
 
         <div className="ml-auto flex items-center gap-4">
+          <Link
+            href="/audit"
+            className="t-label text-[var(--color-ink-mute)] underline underline-offset-4 transition-colors hover:text-[var(--color-ink)]"
+          >
+            Audit trail →
+          </Link>
           <input
             ref={fileRef}
             type="file"
@@ -132,11 +139,7 @@ export default function Workspace() {
               e.target.value = "";
             }}
           />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={busy}
-            className="btn-outline"
-          >
+          <button onClick={() => fileRef.current?.click()} disabled={busy} className="btn-outline">
             Upload audio
           </button>
           {busy && (
@@ -191,7 +194,9 @@ export default function Workspace() {
       </AnimatePresence>
 
       {/* the three columns */}
-      <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-3 lg:gap-8">
+      <div ref={gridRef} className="relative mt-10 grid grid-cols-1 gap-10 lg:grid-cols-3 lg:gap-8">
+        {/* the tether arc draws claim(note) -> claim(rail) on hover */}
+        <Tether containerRef={gridRef} active={linkedFlag} />
         <div className={colClass}>
           <TranscriptPanel transcript={state.transcript} stage={state.stage} />
         </div>
@@ -234,6 +239,17 @@ export default function Workspace() {
             {state.reliability && (
               <span className="t-label text-[var(--color-ink-faint)]">
                 {state.reliability.score_note}
+              </span>
+            )}
+            {state.recorded && state.requestId && (
+              <span className="t-label ml-auto text-[var(--color-ink-faint)]">
+                saved to audit trail ·{" "}
+                <Link
+                  href="/audit"
+                  className="underline underline-offset-4 transition-colors hover:text-[var(--color-ink)]"
+                >
+                  {state.requestId}
+                </Link>
               </span>
             )}
           </motion.div>

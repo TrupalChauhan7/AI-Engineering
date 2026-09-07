@@ -22,8 +22,6 @@ services:
       # Docker Desktop (macOS/Windows); the extra_hosts line below makes the
       # same name work on Linux.
       S2N_OLLAMA_HOST: http://host.docker.internal:11434
-      # WHICH pipeline is the default/warm one (clinical | meetings).
-      S2N_DOMAIN: clinical
     extra_hosts:
       - "host.docker.internal:host-gateway"   # Linux: map the name to the host
     volumes:

@@ -27,27 +27,6 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
     return _apply_domain(cfg)
 
 
-def load_config_for_domain(domain: str | None, path: Path = CONFIG_PATH) -> dict:
-    """Return the config resolved for a SPECIFIC domain, ignoring ``S2N_DOMAIN``.
-
-    The server needs to pick a domain per request, so an explicit choice must
-    win over both the file's ``domain`` and the ``S2N_DOMAIN`` env var (which is
-    a single-run override for scripts, not a per-request signal). ``domain=None``
-    falls back to the file's default. Unknown domains raise so a bad request
-    fails loudly rather than silently running the wrong pipeline.
-    """
-    with open(path, "r") as f:
-        cfg = yaml.safe_load(f)
-    if domain is not None and domain not in (cfg.get("domains") or {}):
-        raise ValueError(f"unknown domain '{domain}'; known: {available_domains(cfg)}")
-    return _apply_domain(cfg, name=domain)
-
-
-def available_domains(cfg: dict) -> list[str]:
-    """The domain names defined in the config (e.g. ['clinical', 'meetings'])."""
-    return list((cfg.get("domains") or {}).keys())
-
-
 def _apply_env_overrides(cfg: dict) -> None:
     """Apply deployment overrides that must come from the environment, in place.
 
@@ -62,18 +41,18 @@ def _apply_env_overrides(cfg: dict) -> None:
         cfg["llm"]["host"] = host
 
 
-def _apply_domain(cfg: dict, name: str | None = None) -> dict:
-    """Overlay a ``domain`` profile's overrides onto the base config.
+def _apply_domain(cfg: dict) -> dict:
+    """Overlay the active ``domain`` profile's overrides onto the base config.
 
-    Behaviour-preserving: with domain=clinical the overrides equal the base
-    values, so the resolved config is identical to the academic setup.
-
-    ``name`` selects the profile explicitly (used by the per-request server
-    path); when omitted, the precedence is ``S2N_DOMAIN`` env then the file's
-    ``domain`` — the original script behaviour, unchanged.
+    The PRODUCT is clinical-only and never sets ``S2N_DOMAIN``, so this resolves
+    to the clinical profile — which is behaviour-preserving (its overrides equal
+    the base values, i.e. the academic setup). The only caller that sets
+    ``S2N_DOMAIN`` is the meetings *evaluation* harness (scripts/), which uses
+    this to reproduce the generalisation study; that path is research, not the
+    product.
     """
     _apply_env_overrides(cfg)
-    name = name or os.environ.get("S2N_DOMAIN") or cfg.get("domain")
+    name = os.environ.get("S2N_DOMAIN") or cfg.get("domain")
     profile = (cfg.get("domains") or {}).get(name)
     if not profile:
         return cfg

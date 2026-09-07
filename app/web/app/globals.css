@@ -212,7 +212,24 @@ html.lenis body {
   --underline: 1;
 }
 
-/* Cross-link highlight when hovering a flag in the rail (§6.4) */
+/* IGNITE: the instant the scan beam crosses a flag and draws its underline, a
+   brief red wash blooms and fades — the flag "catching light". Colour on a flag
+   is on-system (signal colour). The animation plays once, when data-drawn flips
+   false -> true and the selector starts matching. */
+@keyframes flag-ignite {
+  0% {
+    background: rgba(224, 87, 79, 0.32);
+  }
+  100% {
+    background: rgba(224, 87, 79, 0);
+  }
+}
+.flagged[data-drawn="true"] {
+  animation: flag-ignite 0.75s var(--ease-editorial);
+}
+
+/* Cross-link highlight when hovering a flag in the rail (§6.4). Kept AFTER the
+   ignite rule so a hovered flag's steady wash wins over the finished animation. */
 .flagged[data-linked="true"] {
   background: rgba(224, 87, 79, 0.12);
 }

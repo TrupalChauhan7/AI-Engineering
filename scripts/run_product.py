@@ -28,10 +28,9 @@ import requests
 ROOT = Path(__file__).resolve().parent.parent
 OLLAMA_HOST = os.environ.get("S2N_OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 
-# The Ollama models the product can use across both domains (clinical +
-# meetings) plus the shared verifier. Whisper is NOT here — it is not an Ollama
-# model and self-downloads.
-REQUIRED_MODELS = ("medgemma:4b", "qwen3:14b", "llama3.1:8b")
+# The Ollama models the (clinical) product needs: the generator + the verifier.
+# Whisper is NOT here — it is not an Ollama model and self-downloads.
+REQUIRED_MODELS = ("medgemma:4b", "llama3.1:8b")
 
 
 def _ollama_tags() -> list[str] | None:

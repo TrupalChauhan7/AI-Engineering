@@ -26,13 +26,13 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from app.api.spans import locate_claims
-from app.api.warmup import WarmPool, demo_config
-from s2n.config import ROOT, available_domains, load_config, load_config_for_domain
+from app.api.warmup import WarmPool
+from s2n.config import ROOT, load_config
 from s2n.service import run_pipeline_staged
 from s2n.store import RunStore
 
@@ -312,29 +312,14 @@ def _record_run(
 
 
 @app.post("/api/analyze")
-async def analyze(
-    request: Request, audio: UploadFile, domain: str | None = Form(default=None)
-) -> StreamingResponse:
-    """Run the real pipeline on an uploaded consultation, streaming each stage.
-
-    ``domain`` (form field, optional) selects which pipeline runs — e.g.
-    ``clinical`` or ``meetings``. Omitted, the server's default/warm domain is
-    used. An unknown domain is a 400, so a caller can never silently get the
-    wrong pipeline.
-    """
+async def analyze(request: Request, audio: UploadFile) -> StreamingResponse:
+    """Run the real pipeline on an uploaded consultation, streaming each stage."""
     suffix = Path(audio.filename or "").suffix.lower()
     if suffix not in ALLOWED_AUDIO:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported audio type '{suffix or 'unknown'}'. "
             f"Use one of: {', '.join(sorted(ALLOWED_AUDIO))}",
-        )
-
-    known = available_domains(load_config())
-    if domain is not None and domain not in known:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown domain '{domain}'. Available: {', '.join(known) or '(none)'}.",
         )
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="clarion-"))
@@ -351,14 +336,8 @@ async def analyze(
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise HTTPException(status_code=400, detail="Empty audio file.")
 
-    # Resolve the config for the requested domain (demo ASR swap applied). When
-    # no domain is asked for, reuse the warm pool's default config as before.
-    use_default = domain is None or (POOL and domain == POOL.domain)
-    if use_default:
-        cfg = POOL.cfg if POOL else load_config()
-    else:
-        cfg = demo_config(load_config_for_domain(domain))
-    components = POOL.components_for(cfg) if POOL else {}
+    cfg = POOL.cfg if POOL else load_config()
+    components = POOL.components() if POOL else {}
     timeout_s = float(load_config().get("demo", {}).get("stage_timeout_s", 300))
     request_id = getattr(request.state, "request_id", None)
 
@@ -401,22 +380,6 @@ def health() -> dict:
             "unreliable_min": int(bands["unreliable_min"]),
         },
         "audit_runs": STORE.count() if STORE else None,
-        "warm_domain": POOL.domain if POOL else None,
-    }
-
-
-@app.get("/api/domains")
-def domains() -> dict:
-    """Which domains this server can run, the default, and which is kept warm.
-
-    A domain other than ``warm`` still runs; its models are built on the first
-    request to it (a slower first call), so a UI can label that if it wants.
-    """
-    cfg = load_config()
-    return {
-        "available": available_domains(cfg),
-        "default": cfg.get("active_domain") or cfg.get("domain"),
-        "warm": POOL.domain if POOL else None,
     }
 
 

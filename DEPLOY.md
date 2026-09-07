@@ -15,9 +15,8 @@ GPU/Metal.
 
 ```bash
 ollama serve                     # or just open the Ollama app
-ollama pull medgemma:4b          # clinical generator
-ollama pull qwen3:14b            # meetings generator
-ollama pull llama3.1:8b          # shared verifier (both domains)
+ollama pull medgemma:4b          # the note generator
+ollama pull llama3.1:8b          # the claim verifier
 ```
 
 Whisper (transcription) is separate and downloads its own small weights on first
@@ -77,14 +76,12 @@ the container can reach the host's Ollama the same way it does on macOS/Windows.
 | Variable | Default | What it does |
 |---|---|---|
 | `S2N_OLLAMA_HOST` | `http://localhost:11434` | Where the LLM backend (Ollama) is. Set to `http://host.docker.internal:11434` from a container, or a remote URL. |
-| `S2N_DOMAIN` | `clinical` | The default/warm pipeline (`clinical` or `meetings`). A request can still override per call. |
 
 ## The API, briefly
 
 | Route | Purpose |
 |---|---|
-| `POST /api/analyze` | Run the pipeline on an uploaded audio file (streamed). Optional `domain` form field. |
-| `GET /api/domains` | Which domains are available, the default, and which is warm. |
+| `POST /api/analyze` | Run the pipeline on an uploaded consultation audio file (streamed). |
 | `GET /api/runs`, `/api/runs/{id}` | The audit trail: recent runs, and one run's full record with provenance. |
 | `GET /api/stats`, `/api/metrics` | Aggregate counts, and per-stage latency (mean/p50/p90). |
 | `GET /api/health` | Liveness + whether models are warm. |

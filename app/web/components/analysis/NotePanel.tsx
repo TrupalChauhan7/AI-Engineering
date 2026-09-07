@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { EASE } from "@/lib/motion";
 import type { Span, Stage } from "@/lib/types";
 
-const SCAN_MS = 1100;
+const SCAN_MS = 1500;
 
 interface Segment {
   text: string;
@@ -119,16 +119,32 @@ export default function NotePanel({
         data-lenis-prevent
         className="scroll-panel relative mt-5 min-h-0 flex-1 overflow-y-auto pr-2"
       >
-        {/* the verification sweep — 1px hairline, travels once */}
+        {/* the verification sweep — a crisp 1px line leading a faint value-only
+            trail (no colour, no glow — depth from value, per the design system).
+            Travels once, top to bottom, as each flag it crosses ignites. */}
         {scanning && (
           <motion.div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 z-10 h-px bg-[var(--color-ink)]"
-            style={{ willChange: "transform", opacity: 0.85 }}
-            initial={{ top: 0 }}
+            className="pointer-events-none absolute inset-x-0 z-10"
+            style={{ willChange: "transform", height: 52 }}
+            initial={{ top: -52 }}
             animate={{ top: "100%" }}
             transition={{ duration: SCAN_MS / 1000, ease: "linear" }}
-          />
+          >
+            {/* trailing wash above the leading edge */}
+            <div
+              className="absolute inset-x-0 bottom-0 h-full"
+              style={{
+                background:
+                  "linear-gradient(to bottom, rgba(244,244,245,0) 0%, rgba(244,244,245,0.06) 85%, rgba(244,244,245,0.10) 100%)",
+              }}
+            />
+            {/* the leading edge itself */}
+            <div
+              className="absolute inset-x-0 bottom-0 h-px bg-[var(--color-ink)]"
+              style={{ opacity: 0.9 }}
+            />
+          </motion.div>
         )}
 
         {!note ? (

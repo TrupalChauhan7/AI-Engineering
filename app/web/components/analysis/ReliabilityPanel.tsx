@@ -141,6 +141,7 @@ export default function ReliabilityPanel({
               {reliability.unsupported_claims.map((c, i) => (
                 <motion.li
                   key={i}
+                  data-railflag={i}
                   variants={fadeUp}
                   custom={i}
                   onMouseEnter={() => onHoverFlag(i)}
