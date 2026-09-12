@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useMemo } from "react";
 import { EASE } from "@/lib/motion";
 import type { Stage } from "@/lib/types";
+import { StageDot } from "../StageProgress";
 
 /** Split a transcript into speaker turns so the stream reads like dialogue. */
 function turns(transcript: string) {
@@ -31,7 +32,10 @@ export default function TranscriptPanel({
   return (
     <div className="relative flex min-h-0 flex-col lg:h-full">
       <header className="flex items-baseline justify-between border-b border-[var(--color-hairline)] pb-3">
-        <span className="t-label text-[var(--color-ink-2)]">01 — Transcript</span>
+        <span className="t-label flex items-center gap-2 text-[var(--color-ink-2)]">
+          <StageDot state={transcript ? "done" : stage === "transcribe" ? "active" : "idle"} />
+          01 — Transcript
+        </span>
         <span className="t-label text-[var(--color-ink-faint)]">Whisper</span>
       </header>
 
@@ -40,10 +44,10 @@ export default function TranscriptPanel({
         className="scroll-panel mt-5 min-h-0 flex-1 space-y-4 overflow-y-auto pr-2"
       >
         {running && (
-          <p className="t-note text-[var(--color-ink-faint)]">Listening…</p>
+          <p className="t-note text-[var(--color-ink-2)]">Listening…</p>
         )}
         {!running && !lines.length && (
-          <p className="t-note text-[var(--color-ink-faint)]">
+          <p className="t-note text-[var(--color-ink-2)]">
             Choose a consultation or upload audio.
           </p>
         )}
@@ -64,15 +68,18 @@ export default function TranscriptPanel({
           </motion.p>
         ))}
       </div>
-        {/* hints there is more below — only where the panel scrolls */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden h-12 lg:block"
-          style={{
-            background:
-              "linear-gradient(to bottom, transparent, var(--color-canvas) 88%)",
-          }}
-        />
+        {/* hints there is more below — only when there's content that scrolls,
+            so the fade never sits on top of the empty-state placeholder */}
+        {lines.length > 0 && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden h-12 lg:block"
+            style={{
+              background:
+                "linear-gradient(to bottom, transparent, var(--color-canvas) 88%)",
+            }}
+          />
+        )}
     </div>
   );
 }

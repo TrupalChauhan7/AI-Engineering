@@ -4,6 +4,7 @@ import { animate, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { EASE, fadeUp, stagger } from "@/lib/motion";
 import { VERDICT_COLOR, VERDICT_WORD, type Reliability, type Stage } from "@/lib/types";
+import { StageDot } from "../StageProgress";
 
 /** Counts tick up rather than snapping — the numbers should feel *counted*. */
 function Count({ to, delay = 0 }: { to: number; delay?: number }) {
@@ -82,12 +83,15 @@ export default function ReliabilityPanel({
   return (
     <div className="flex min-h-0 flex-col lg:h-full">
       <header className="flex items-baseline justify-between border-b border-[var(--color-hairline)] pb-3">
-        <span className="t-label text-[var(--color-ink-2)]">03 — Reliability</span>
+        <span className="t-label flex items-center gap-2 text-[var(--color-ink-2)]">
+          <StageDot state={reliability ? "done" : stage === "reliability" ? "active" : "idle"} />
+          03 — Reliability
+        </span>
         <span className="t-label text-[var(--color-ink-faint)]">Claim verifier</span>
       </header>
 
       {!reliability ? (
-        <p className="t-note mt-5 text-[var(--color-ink-faint)]">
+        <p className="t-note mt-5 text-[var(--color-ink-2)]">
           {stage === "generate" ? "Note drafted — verifying next…" : "Awaiting note…"}
         </p>
       ) : (

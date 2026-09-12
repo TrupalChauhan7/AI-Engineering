@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EASE } from "@/lib/motion";
 import type { Span, Stage } from "@/lib/types";
+import { StageDot } from "../StageProgress";
 
 const SCAN_MS = 1500;
 
@@ -110,7 +111,10 @@ export default function NotePanel({
   return (
     <div className="relative flex min-h-0 flex-col lg:h-full">
       <header className="flex items-baseline justify-between border-b border-[var(--color-hairline)] pb-3">
-        <span className="t-label text-[var(--color-ink-2)]">02 — Generated note</span>
+        <span className="t-label flex items-center gap-2 text-[var(--color-ink-2)]">
+          <StageDot state={note ? "done" : stage === "generate" ? "active" : "idle"} />
+          02 — Generated note
+        </span>
         <span className="t-label text-[var(--color-ink-faint)]">MedGemma 4B</span>
       </header>
 
@@ -148,7 +152,7 @@ export default function NotePanel({
         )}
 
         {!note ? (
-          <p className="t-note text-[var(--color-ink-faint)]">Awaiting transcript…</p>
+          <p className="t-note text-[var(--color-ink-2)]">Awaiting transcript…</p>
         ) : (
           <motion.p
             className="t-note whitespace-pre-wrap text-[var(--color-ink)]"
@@ -177,15 +181,18 @@ export default function NotePanel({
           </motion.p>
         )}
       </div>
-        {/* hints there is more below — only where the panel scrolls */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden h-12 lg:block"
-          style={{
-            background:
-              "linear-gradient(to bottom, transparent, var(--color-canvas) 88%)",
-          }}
-        />
+        {/* hints there is more below — only when there's a note that scrolls,
+            so the fade never sits on top of the empty-state placeholder */}
+        {note && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden h-12 lg:block"
+            style={{
+              background:
+                "linear-gradient(to bottom, transparent, var(--color-canvas) 88%)",
+            }}
+          />
+        )}
     </div>
   );
 }
