@@ -5,13 +5,18 @@ Starts the FastAPI backend (:8000) and the Next.js front end (:3000) together, s
 `python scripts/dev.py` works everywhere the Unix-only `scripts/dev.sh` used to.
 Press Ctrl-C to stop both.
 """
+
 from __future__ import annotations
-import os, sys, shutil, subprocess
+
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "app" / "web"
-NPM = "npm.cmd" if os.name == "nt" else "npm"   # Windows npm is npm.cmd
+NPM = "npm.cmd" if os.name == "nt" else "npm"  # Windows npm is npm.cmd
 
 
 def main() -> None:
@@ -29,6 +34,7 @@ def main() -> None:
     print("-> Web  http://localhost:3000")
     web = subprocess.Popen([NPM, "run", "dev"], cwd=WEB)
     import time
+
     try:
         while api.poll() is None and web.poll() is None:
             time.sleep(1)
