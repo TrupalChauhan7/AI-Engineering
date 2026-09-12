@@ -1,282 +1,150 @@
-# Speech-to-Clinical-Note (s2n)
+# Clarion — a reliability flag for AI-generated clinical notes
 
-Turn a GP consultation recording into a SOAP note — then **check every claim in
-that note against what was actually said, and flag the notes that are
-unreliable.** The reliability flag is the star; the app is just the stage.
+> Turn a doctor–patient consultation into a structured clinical note — then **check every claim in that note against what was actually said, and flag the notes that can't be trusted.**
 
-**Module:** ECS-8060 AI Engineering · **Author:** Trupal Chauhan · Dataset: PriMock57
+An AI can turn a consultation recording into a tidy SOAP note. But a *fluent* note isn't necessarily a *faithful* one: it can state things that were never said (**hallucinations**) or quietly drop things that were (**omissions**) — both dangerous in medicine. Clarion is a local, free pipeline that writes the note **and grades its own trustworthiness**, turning the result into a traffic-light verdict: 🟢 reliable · 🟡 review · 🔴 unreliable.
 
-This repo holds two things: the **research** (the reliability method, validated on
-PriMock57 human ratings) and the **product** built around it — *Clarion*, a local
-web app that runs the pipeline and, around it, an **audit trail** (every run is
-stored with the exact models and prompt versions that produced it), a **reviewer
-dashboard** at `/audit`, request-id tracing and per-stage latency **metrics** for
-observability, and **one-command packaging** (`make run`, or Docker). The product
-is clinical-only. To run it, see **[DEPLOY.md](DEPLOY.md)**.
+**The reliability flag is the research contribution. The app is the stage it runs on.**
+
+<!-- Demo GIF goes here once recorded (task 2). Placeholder path: -->
+![Clarion running a consultation end-to-end](docs/demo.gif)
+
+*Everything runs 100% locally and free — no cloud, no API keys. The audio never leaves the machine.*
 
 ---
 
-## 🚀 Quick start (the easy way — no experience needed)
+## The headline result
 
-You do **not** need to understand the code to run this. One file does everything:
-it installs what's missing, downloads the AI models, and opens the app in your
-browser.
+The central question: **can an automatic score flag unreliable notes better than the standard text-similarity metrics?** Clarion validates this against PriMock57's clinician error ratings, under a locked pre-registration with the held-out test **scored exactly once**.
 
-**On Windows** (e.g. the lab laptops)
-1. Double-click **`SETUP_WINDOWS.bat`** (it's in this folder).
-2. A black window opens and works through 6 steps on its own. The first run
-   downloads ~8 GB of AI models, so give it 20–40 minutes on a fast connection. ☕
-3. A second small window titled **"Ollama Engine"** pops up — **leave it open.**
-   That's the brain running in the background.
-4. When it's done, your browser is ready at **http://localhost:3000**.
+On the held-out **TEST** set (machine-written notes, n = 188 notes across 47 consultations), ranked by agreement with clinician error counts (Spearman ρ, 95% CI from a cluster bootstrap over whole consultations):
 
-**On Mac**
-1. Double-click **`setup_mac.command`** (or in a terminal: `./setup_mac.command`).
-2. Same idea — it installs anything missing and launches the app.
-3. Open **http://localhost:3000**.
+| Rank | Signal | TEST ρ [95% CI] | DEV ρ |
+|---|---|---|---|
+| 🥇 | **Claim-verifier (this project)** | **0.26 [0.08, 0.42]** | 0.67 |
+| 2 | Levenshtein | 0.25 [0.08, 0.40] | 0.25 |
+| 3 | LLM judge (Selene-Mini) | 0.20 [0.05, 0.34] | 0.03 |
+| 4 | SummaC | 0.19 [0.01, 0.36] | −0.11 |
+| 5 | ROUGE-L | 0.13 [−0.06, 0.33] | 0.30 |
+| 6 | **BERTScore** | **0.06 [−0.12, 0.23]** | 0.56 |
 
-That's the whole thing. Everything below is for people who want to look under the
-hood or reproduce the research results.
+**BERTScore looked best in development (0.56) and then collapsed on unseen data (0.06)** — its dev strength was leverage from one easy outlier. The source-grounded **claim-verifier was the most robust signal**, reaching ~48% of the human agreement ceiling, and it's the **only signal that works without a reference note** — i.e. the only one usable in real deployment, where there's no "correct" note to compare against.
 
-> 💡 **University lab laptops wipe themselves every night.** Nothing you install
-> survives to tomorrow. That's normal — just double-click the setup file again at
-> the start of each session and it rebuilds everything from scratch.
+The point isn't "my method wins everything" (no signal statistically dominates — the confidence intervals overlap). The point is that **pre-registration discipline is what exposed BERTScore's non-generalisation.** Measuring honestly beat measuring optimistically.
 
 ---
 
-## 🧰 What you need before you start
+## How it works
 
-The setup file handles almost everything, but two base tools must already be on
-the machine (they usually are — the lab PCs and most Macs ship with them):
+Four stages, one Python library, all local:
 
-| Tool | Check it's there | If missing |
+```
+  audio  ──▶  Whisper large-v3-turbo  ──▶  transcript
+             transcript  ──▶  MedGemma-4B  ──▶  SOAP note
+  note + transcript  ──▶  claim-verifier (Llama-3.1-8B)  ──▶  unsupported + omitted counts
+             counts  ──▶  reliability flagger  ──▶  🟢 reliable / 🟡 review / 🔴 unreliable
+```
+
+A deliberate rule underpins the checker: **the verifier is a different model family from the generator**, so the model grading the note never grades its own writing. The verifier checks each claim in the note against the transcript, *and* separately lists what the note left out — because in clinical notes, the omissions are the more common failure.
+
+The whole thing is exposed through one UI-agnostic entry point (`s2n.service.run_pipeline`) that takes audio *or* a transcript and returns plain JSON.
+
+### The models (all local via Ollama, ≤8 GB total)
+
+| Role | Model | In the product? |
 |---|---|---|
-| **Python 3.10+** | run `python --version` | Install from [python.org](https://www.python.org/downloads/) — tick *"Add to PATH"* |
-| **Node.js 20+** | run `node --version` | Install from [nodejs.org](https://nodejs.org) (LTS version) |
-
-The setup file installs the rest for you, no admin rights needed:
-
-- **ffmpeg** — lets the app read audio files (downloaded into this folder).
-- **Ollama** — runs the AI models locally (portable version, no installer).
-- **AI models (Ollama)** — the app needs two: `medgemma:4b` (writes the note) and
-  `llama3.1:8b` (the claim verifier / reliability check). A third, `atla/selene-mini`,
-  is pulled only to *reproduce the research* (the scoring judge) — not needed to run
-  the app. ~8 GB total for all three.
-- **Python libraries** — everything in `requirements.txt`.
-
-Everything runs **100% free and offline** once downloaded — no paid APIs, no
-cloud, no API keys. Your audio never leaves the machine.
+| Transcribe | Whisper large-v3-turbo | ✅ |
+| Generate the note | MedGemma-4B | ✅ |
+| **Verify claims** ★ | Llama-3.1-8B (stock model, custom method) | ✅ |
+| Judge (research baseline) | Atla Selene-Mini | ❌ reproduction only |
 
 ---
 
-## 🛟 If something goes wrong
+## Beyond the research: the product
 
-These are the exact problems we hit and how to fix them. Most are one line.
+The research would be a notebook. Clarion wraps it in a real, operable system:
 
-| What you see | What it means | Fix |
-|---|---|---|
-| `'ollama' is not recognized` | The window opened before Ollama was installed | Close it, open a **new** Command Prompt, try again — or just re-run `SETUP_WINDOWS.bat` |
-| `No such file or directory: 'ffmpeg'` | ffmpeg isn't reachable | Re-run the setup file; it drops `ffmpeg.exe` into this folder |
-| `Connection refused ... 11434` | The "Ollama Engine" window got closed | Reopen it: `SETUP_WINDOWS.bat` starts it again |
-| `Address already in use ... 8000` | A previous run is still holding the port | Close old black windows, or restart the machine, then re-run |
-| `winget is not recognized` | The lab PC has no installer helper | You don't need it — the setup file downloads tools directly |
-| It pasted as one long broken line | You pasted many lines into Command Prompt at once | **Don't copy-paste steps** — just double-click `SETUP_WINDOWS.bat` |
-
-Still stuck? The setup file is safe to run again as many times as you like — it
-skips anything already done.
+- **Streaming web app** — FastAPI + Next.js 15, showing each stage live over SSE as it runs.
+- **Audit trail** — every run is persisted (SQLite) with the exact models and prompt versions that produced it, so any verdict is fully reproducible after the fact.
+- **Reviewer dashboard** at `/audit` — browse past runs, inspect verdicts, filter and drill in.
+- **Observability** — request-id tracing end to end, plus per-stage latency metrics (`/api/metrics`).
+- **One-command packaging** — `make run`, or a Docker image that talks to Ollama on the host.
 
 ---
 
-## 🔬 For the marker: research questions & pipeline
+## Quick start
 
-- **RQ1 (main):** How faithful are the AI-generated notes, and can we
-  *automatically flag* the unreliable ones? Does an LLM-as-a-judge faithfulness
-  score beat traditional metrics (ROUGE, BERTScore, Levenshtein) at flagging?
-- **RQ2:** How much do speech-to-text (Whisper) errors degrade the notes?
+You don't need to read the code to run it. One file installs what's missing, downloads the models (~8 GB, first run only), and opens the app.
 
-```
-audio ──Whisper──▶ transcript ──LLM+prompt──▶ SOAP note ──evaluation──▶ RELIABILITY FLAG 🚨
-                                                   │
-                        validated against PriMock57 human ratings (RQ1)
-```
+**Mac:** double-click `setup_mac.command` (or `./setup_mac.command` in a terminal), then open **http://localhost:3000**.
+
+**Windows:** double-click `SETUP_WINDOWS.bat`, leave the "Ollama Engine" window open, then open **http://localhost:3000**.
+
+For running it as a service, the Docker image, and full troubleshooting, see **[DEPLOY.md](DEPLOY.md)**. To reproduce the research pipeline end to end, see [Reproducing the research](#reproducing-the-research) below.
 
 ---
 
-## Manual setup (if you'd rather not use the setup file)
+## What it's honest about (limitations)
 
-Works the same on Mac, Linux, or Windows. Run these from this folder.
+Good engineering names its own blind spots. Clarion's:
 
-**1. Create an isolated Python environment** (so nothing clashes with the rest of
-the machine):
+- **It catches fabrications well but misses ~two-thirds of omissions** — the single biggest weakness, and quantified rather than hidden.
+- **Verdict thresholds are population-specific** and must be recalibrated per deployment.
+- A **near-empty note can look "faithful"** — the flag needs a length/coverage guard.
+- It measures **faithfulness, not relevance** — it won't reject off-topic audio (no "is this even a consultation?" gate).
+- **Individual flags can be wrong**; only the note-level *count* is validated.
+- Validated on **one primary dataset** (PriMock57) — generalisation to other data/accents is unproven.
 
-```bash
-# Mac / Linux
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Windows (Command Prompt)
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-**2. Install the code and its libraries:**
-
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
-
-**3. Install the system tools** (once):
-
-- **ffmpeg** — Mac: `brew install ffmpeg` · Windows: download the "essentials"
-  build from [gyan.dev/ffmpeg](https://www.gyan.dev/ffmpeg/builds/) and put
-  `ffmpeg.exe` on your PATH (or in this folder).
-- **Ollama** — Mac: `brew install ollama` · Windows: the portable zip from
-  [ollama.com/download](https://ollama.com/download). Then start it and pull the
-  models:
-
-```bash
-ollama serve            # leave this running in its own window
-ollama pull medgemma:4b
-ollama pull llama3.1:8b
-ollama pull atla/selene-mini
-```
-
-**4. (Optional) the third-party audio** — PriMock57's audio is licensed and not
-included. Fetch it only if you want to reproduce the research:
-
-```bash
-cd primock57 && python3 download_audio.py && cd ..
-```
+None of these are dealbreakers for a flag whose job is to say "a human should look at this one." They're the roadmap.
 
 ---
 
-## Run the demo (Clarion)
+## Tech stack
 
-A **FastAPI + Next.js** app in `app/`: pick a consultation (or upload your own
-audio) and watch the transcript stream in, the SOAP note draft itself, and a
-hairline sweep down the note flagging every claim the recording does not support.
+**Python** (library + 12 numbered, reproducible pipelines) · **FastAPI** + Server-Sent Events · **Next.js 15 / TypeScript / Tailwind** · **Ollama** (local inference) · **SQLite** (audit trail) · **Docker**. Config-driven throughout; versioned prompts; data-leakage prevented structurally and enforced by an automated test. 144 passing tests.
 
-```bash
-# one time: cache the sample consultations (runs the real pipeline; slow)
-python scripts/build_samples.py        # or: make samples
-
-# start the app (FastAPI on :8000 + Next.js on :3000)
-python scripts/dev.py                   # or: make demo
-```
-
-Then open **http://localhost:3000**. Needs Ollama running with `medgemma:4b` and
-`llama3.1:8b`, plus Node 20+.
-
-Selecting a **sample** replays a cached result instantly — no models run, so the
-demo is reproducible on camera. **Uploading audio** runs the real local pipeline
-and streams each stage over SSE into the same animation, with a live per-stage
-elapsed counter so a slow stage never looks frozen.
-
-**The demo's ASR is not the research ASR.** RQ2 is sealed on
-`transcription.model: large-v3-turbo`, which takes minutes per consultation on
-CPU. The live-upload path alone swaps in `demo.transcription_model: base`
-(config), which transcribes a one-minute clip in under two seconds — a ~55s clip
-goes from upload to verdict in about **13 seconds**. Cached samples and every
-research number still come from the sealed model; nothing in `demo:` can move a
-result. The API also warms Whisper and both Ollama models at startup (~10–17s),
-so the first upload is not the slow one.
-
-> **Data safety:** `app/web/public/samples/` holds transcript and note text and is
-> gitignored. Regenerate it locally; never commit it.
-
-Every real (uploaded) run is written to a local **audit trail** — open **`/audit`**
-in the app to browse past runs and open any one to see its full provenance (models,
-prompt versions, verdict bands, flagged claims). The same data is served at
-`GET /api/runs`, `/api/runs/{id}`, `/api/stats`, and `/api/metrics`. For running the
-product as a service (a preflight launcher and a Docker image that talks to Ollama on
-the host), see **[DEPLOY.md](DEPLOY.md)** — `make run`, `make check`, `make docker`.
-
----
-
-## Reproduce the research pipeline (00 → 11)
-
-Every stage is a standalone script in `pipelines/`, run in order with your
-environment active and Ollama up (`medgemma:4b`, `llama3.1:8b`,
-`atla/selene-mini`). All settings come from `config/config.yaml`.
-
-```bash
-python pipelines/00_dataset_report.py        # dataset inventory + integrity
-python pipelines/01_transcribe.py            # Whisper over the audio          (RQ2)
-python pipelines/02_generate_notes.py        # transcripts → SOAP notes
-python pipelines/03_evaluate.py              # metrics + judge + reliability         (RQ1)
-python pipelines/03a_endpoint_selection.py   # pick the human-label endpoint
-python pipelines/03b_summac_validity_gate.py # SummaC-ZS sanity gate
-python pipelines/03c_track_a_dev.py          # Track A DEV: baselines + judge v1.0
-python pipelines/03d_judge_v11_dev.py        # judge rubric v1.1 (count-to-count)
-python pipelines/03e_judge_selene_dev.py     # judge v1.2 Selene-Mini — FROZEN
-python pipelines/04_transcribe_dev.py        # DEV ASR + WER                   (RQ2)
-python pipelines/05_rq2_paired_dev.py        # RQ2 paired DEV pilot (§C)
-python pipelines/06_claim_verifier_dev.py    # claim verifier: incorrectness axis
-python pipelines/07_claim_verifier_omissions_dev.py   # + omission axis
-python pipelines/08_claim_verifier_final_dev.py       # LOCKED verifier config
-python pipelines/09_format_mts.py            # MTS-Dialog → LoRA training data (Track B)
-python pipelines/10_finetune_eval_dev.py     # base vs LoRA fine-tuned DEV eval
-python pipelines/11_test_oneshot.py          # DEV dry-run of the one-shot harness
-```
-
-**⚠ The held-out TEST split is scored exactly once** (pre-registration §B5/§D)
-and **has already been run**. `pipelines/11_test_oneshot.py --split test` is
-guarded: it refuses to re-score while `results/oneshot_test_scores.csv` exists.
-Use `--split test --no-refresh` to re-print the analysis from the recorded
-scores. Committed results are scores-only
-(`results/oneshot_test_scores_metrics.csv`, `oneshot_test_correlation.csv`);
-the full artefacts stay local because they embed transcripts and gold notes.
-
-**Note:** the LoRA fine-tuning pipelines (`10`, `12_finetune_train`) use Apple
-**MLX** and run on Apple-Silicon Macs only; that experiment is complete and its
-results are in `results/finetune/`. Everything else — transcription, generation,
-the reliability check, and the demo — runs on any OS.
-
----
-
-## Using the pipeline directly
-
-`s2n.service.run_pipeline()` is UI-agnostic — audio (or a transcript) in, a plain
-JSON-serialisable dict out:
-
-```python
-from s2n.service import run_pipeline
-result = run_pipeline(audio_path="results/mixed_audio_dev/day1_consultation02.wav")
-print(result["reliability"]["verdict"], "—", result["reliability"]["score_note"])
-```
-
-`run_pipeline_staged()` yields the same work one stage at a time, which is what
-the SSE endpoint streams.
-
----
-
-## Layout
+### Repo layout
 
 ```
-SETUP_WINDOWS.bat   one-double-click setup for Windows
-setup_mac.command   one-double-click setup for Mac
-config/             one control panel (config.yaml) — every setting lives here
-src/s2n/            the code library (the engine)
-  data/               load PriMock57
-  transcription/      Whisper wrapper                 (RQ2)
+src/s2n/            the engine (UI-agnostic library)
+  transcription/      Whisper wrapper + WER
   generation/         transcript + prompt → note
-  evaluation/         metrics + LLM-judge + highlights + correlation  ← the heart
-  reliability/        turns the claim counts into a verdict (bands)   ← the star
-  llm/                backend-agnostic client (swap freely, stay free)
+  evaluation/         metrics + LLM-judge + claim-verifier  ← the research
+  reliability/        counts → verdict (the flag)           ← the star
+  llm/                backend-agnostic model client
 prompts/            versioned prompts (v1.0, v1.1 …)
-pipelines/          runnable scripts (00 → 12)
-experiments/        notebooks + experiment configs
-results/            generated outputs (gitignored)
-app/                demo front-end (the stage)
-tests/              unit tests
-docs/               architecture + decision records (ADRs)
-primock57/          dataset (fetched via download script; licensed)
+pipelines/          runnable research stages (00 → 12)
+app/api/            FastAPI + SSE
+app/web/            Next.js front end (Clarion) + /audit dashboard
+config/config.yaml  one control panel — every setting lives here
+tests/              unit tests incl. the leak-safety firewall
+docs/               architecture + decision records
 ```
 
-## Principles
+---
 
-1. **Separation of concerns** — library vs pipelines vs app vs deliverables.
-2. **Reproducibility** — config-driven, versioned prompts, logged results, a
-   one-command setup that works on a fresh machine.
-3. **Evaluation-first** — the evaluation harness is central, not bolted on.
+## Reproducing the research
+
+Every stage is a standalone script in `pipelines/`, run in order with Ollama up (`medgemma:4b`, `llama3.1:8b`, `atla/selene-mini`). All settings come from `config/config.yaml`.
+
+```bash
+python pipelines/00_dataset_report.py     # dataset inventory + integrity
+python pipelines/01_transcribe.py         # Whisper over the audio
+python pipelines/02_generate_notes.py     # transcripts → SOAP notes
+python pipelines/03_evaluate.py           # metrics + judge + reliability
+# … pipelines 03a–08 : endpoint selection, validity gates, the RQ1 harness,
+#     judge versions, and the locked claim-verifier
+python pipelines/11_test_oneshot.py       # the one-shot held-out TEST (already spent)
+```
+
+⚠ **The held-out TEST split is scored exactly once** (pre-registration) and **has already been run.** The harness refuses to re-score it. Committed test results are scores-only; full artefacts stay local because they embed transcripts and gold notes.
+
+Data used: **PriMock57** (57 mock GP consultations + 285 clinician-rated notes — the answer key), a **self-built synthetic set** (43 consultations with *known* planted errors, evaluation-only), and **MTS-Dialog** (fine-tuning experiment only).
+
+---
+
+## Where this came from
+
+Clarion began as a solo MSc module project (ECS-8060, Queen's University Belfast) — built under a locked research protocol and a fixed deadline, submitted and defended in a live viva in August 2026. Everything since is independent development toward a genuinely useful system. The full record of what was academic and what came after — including the research protocol, every major decision, and the results in detail — lives in **[CHECKPOINT.md](CHECKPOINT.md)**.
+
+**Author:** Trupal Chauhan
