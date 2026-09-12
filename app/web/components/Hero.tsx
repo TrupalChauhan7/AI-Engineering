@@ -27,6 +27,7 @@ export default function Hero({ onStart }: { onStart: () => void }) {
 
   return (
     <section
+      id="top"
       ref={ref}
       className="relative isolate flex min-h-svh flex-col justify-between px-6 pb-10 pt-8 md:px-[60px] md:pb-14"
     >

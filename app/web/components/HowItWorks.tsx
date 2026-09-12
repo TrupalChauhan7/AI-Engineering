@@ -51,7 +51,10 @@ export default function HowItWorks() {
   } as const;
 
   return (
-    <section className="border-t border-[var(--color-hairline)] px-6 py-24 md:px-[60px] md:py-32">
+    <section
+      id="how"
+      className="border-t border-[var(--color-hairline)] px-6 py-24 md:px-[60px] md:py-32"
+    >
       <motion.div {...sectionReveal}>
         <p className="t-label mb-6 text-[var(--color-ink-mute)]">003 — How it works</p>
         <h2 className="t-section max-w-[24ch] text-[var(--color-ink)]">
