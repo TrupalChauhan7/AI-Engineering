@@ -160,7 +160,7 @@ export default function AuditPage() {
       {/* title */}
       <motion.div initial="hidden" animate="show" variants={stagger(0.09, 0.1)} className="mt-16">
         <motion.p variants={fadeUp} className="t-label mb-6 text-[var(--color-ink-mute)]">
-          004 — The audit trail
+          003 — The audit trail
         </motion.p>
         <motion.h1 variants={fadeUp} className="t-section max-w-[18ch] text-[var(--color-ink)]">
           Every run, <em className="font-normal italic">on the record.</em>
@@ -268,11 +268,11 @@ export default function AuditPage() {
         {runs.length > 0 && (
           <div className="overflow-x-auto">
             {/* header row */}
-            <div className="grid grid-cols-[1.4fr_1.6fr_0.9fr_1fr] gap-4 border-b border-[var(--color-hairline)] pb-3">
-              {["Time", "Source", "Flags (u+o)", "Verdict"].map((h, i) => (
+            <div className="grid grid-cols-[1.4fr_0.8fr_1.4fr_0.9fr_1fr] gap-4 border-b border-[var(--color-hairline)] pb-3">
+              {["Time", "Domain", "Source", "Flags (u+o)", "Verdict"].map((h, i) => (
                 <span
                   key={h}
-                  className={`t-label text-[var(--color-ink-mute)] ${i === 2 ? "text-right" : ""}`}
+                  className={`t-label text-[var(--color-ink-mute)] ${i === 3 ? "text-right" : ""}`}
                 >
                   {h}
                 </span>
@@ -284,11 +284,12 @@ export default function AuditPage() {
                   key={r.run_id}
                   variants={fadeUp}
                   onClick={() => openRun(r.run_id)}
-                  className="group grid w-full grid-cols-[1.4fr_1.6fr_0.9fr_1fr] items-center gap-4 border-b border-[var(--color-hairline)] py-4 text-left text-[0.8125rem] transition-colors hover:bg-[var(--color-surface)]"
+                  className="group grid w-full grid-cols-[1.4fr_0.8fr_1.4fr_0.9fr_1fr] items-center gap-4 border-b border-[var(--color-hairline)] py-4 text-left text-[0.8125rem] transition-colors hover:bg-[var(--color-surface)]"
                 >
                   <span className="tabular-nums text-[var(--color-ink-mute)] transition-colors group-hover:text-[var(--color-ink-2)]">
                     {fmtTime(r.created_at)}
                   </span>
+                  <span className="capitalize text-[var(--color-ink-2)]">{r.domain}</span>
                   <span className="truncate text-[var(--color-ink-mute)]">
                     {r.source_name ?? r.source}
                   </span>
@@ -350,6 +351,7 @@ function RunDetailPanel({ run, onClose }: { run: RunDetail; onClose: () => void 
       exit={{ opacity: 0 }}
       role="dialog"
       aria-modal="true"
+      aria-label="Run detail"
     >
       <motion.div
         className="scroll-panel relative h-full w-full max-w-2xl overflow-y-auto border-l border-[var(--color-border-strong)] bg-[var(--color-canvas)]"
@@ -373,7 +375,9 @@ function RunDetailPanel({ run, onClose }: { run: RunDetail; onClose: () => void 
 
         <div className="px-8 py-8">
           {/* verdict head — the ring ties it to the app */}
-          <p className="t-label mb-4 text-[var(--color-ink-mute)]">Run</p>
+          <p className="t-label mb-4 text-[var(--color-ink-mute)]">
+            Run · <span className="capitalize">{run.domain}</span>
+          </p>
           <div className="flex items-center gap-6">
             <Ring combined={run.combined} verdict={run.verdict} unreliableMin={run.unreliable_min} />
             <div>
