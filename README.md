@@ -143,6 +143,10 @@ Data used: **PriMock57** (57 mock GP consultations + 285 clinician-rated notes �
 
 ---
 
+## License
+
+This project's own code is released under the **[MIT License](LICENSE)** — use it, learn from it, build on it. Note that the third-party pieces it *uses* keep their own terms: the datasets (PriMock57, MTS-Dialog) and the models (Whisper, MedGemma, Llama 3.1, Selene-Mini) are each under their respective licenses, and none of that data or model weights are redistributed in this repo — you fetch them yourself via the setup scripts.
+
 ## Where this came from
 
 Clarion began as a solo MSc module project (ECS-8060, Queen's University Belfast) — built under a locked research protocol and a fixed deadline, submitted and defended in a live viva in August 2026. Everything since is independent development toward a genuinely useful system. The full record of what was academic and what came after — including the research protocol, every major decision, and the results in detail — lives in **[CHECKPOINT.md](CHECKPOINT.md)**.
